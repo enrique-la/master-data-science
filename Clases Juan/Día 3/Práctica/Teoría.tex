@@ -1,0 +1,927 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\documentclass[
+  10pt,
+]{article}
+\usepackage{xcolor}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{5}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{0.94,0.16,0.16}{#1}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{0.64,0.00,0.00}{\textbf{#1}}}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{#1}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{#1}}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{#1}}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\usepackage{graphicx}
+\makeatletter
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{% scales image to fit in text height/width
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi% select the smaller of both
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}%
+  \fi%
+}
+% Set default figure placement to htbp
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  pdftitle={CHULETA DECISIÓN - Data Science y Diseño Experimental},
+  pdfauthor={Guía Rápida para Examen},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\title{CHULETA DECISIÓN - Data Science y Diseño Experimental}
+\usepackage{etoolbox}
+\makeatletter
+\providecommand{\subtitle}[1]{% add subtitle to \maketitle
+  \apptocmd{\@title}{\par {\large #1 \par}}{}{}
+}
+\makeatother
+\subtitle{¿Qué Test/Método Usar y Cuándo?}
+\author{Guía Rápida para Examen}
+\date{2025-10-14}
+
+\begin{document}
+\maketitle
+
+{
+\setcounter{tocdepth}{3}
+\tableofcontents
+}
+\newpage
+
+\section{ANÁLISIS EXPLORATORIO
+INICIAL}\label{anuxe1lisis-exploratorio-inicial}
+
+\subsection{¿Qué tipo de datos tengo?}\label{quuxe9-tipo-de-datos-tengo}
+
+\subsubsection{VARIABLES CONTINUAS}\label{variables-continuas}
+
+Números con decimales: peso, altura, precio
+
+\textbf{Ejemplo pregunta}: \emph{``Analiza la distribución del peso de
+los pacientes''}
+
+\begin{itemize}
+\tightlist
+\item
+  → Descriptivos: media, mediana, sd, histogramas, boxplots
+\item
+  → Verificar: normalidad (Shapiro-Wilk), outliers
+\end{itemize}
+
+\subsubsection{VARIABLES CATEGÓRICAS}\label{variables-categuxf3ricas}
+
+Grupos: género, ciudad, sí/no
+
+\textbf{Ejemplo pregunta}: \emph{``¿Cuántos pacientes hay por género?''}
+
+\begin{itemize}
+\tightlist
+\item
+  → Descriptivos: tablas de frecuencia, barplots
+\item
+  → Verificar: distribución de categorías
+\end{itemize}
+
+\subsubsection{VARIABLES DE CONTEO}\label{variables-de-conteo}
+
+Enteros ≥ 0: número de visitas, eventos
+
+\textbf{Ejemplo pregunta}: \emph{``Describe el número de visitas
+hospitalarias''}
+
+\begin{itemize}
+\tightlist
+\item
+  → Descriptivos: media, rango, histogramas
+\end{itemize}
+
+\newpage
+
+\section{TESTS DE HIPÓTESIS - ÁRBOL DE
+DECISIÓN}\label{tests-de-hipuxf3tesis---uxe1rbol-de-decisiuxf3n}
+
+\subsection{VARIABLES CONTINUAS
+(medias/localizaciones)}\label{variables-continuas-mediaslocalizaciones}
+
+\subsubsection{1 GRUPO (comparar con valor de
+referencia)}\label{grupo-comparar-con-valor-de-referencia}
+
+\textbf{Ejemplo pregunta}: \emph{``¿La altura media de los estudiantes
+es diferente de 170cm?''}
+
+\begin{itemize}
+\tightlist
+\item
+  ✅ \textbf{One-sample t-test} si: datos normales, sin outliers
+\item
+  ✅ \textbf{Wilcoxon signed-rank} si: outliers o no normalidad
+\end{itemize}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Si normal:}
+\FunctionTok{t.test}\NormalTok{(alturas, }\AttributeTok{mu =} \DecValTok{170}\NormalTok{)}
+
+\CommentTok{\# Si no normal:}
+\FunctionTok{wilcox.test}\NormalTok{(alturas, }\AttributeTok{mu =} \DecValTok{170}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{2 GRUPOS - RELACIONADAS}\label{grupos---relacionadas}
+
+\textbf{Ejemplo pregunta}: \emph{``¿El peso de los pacientes cambió
+después del tratamiento?''}
+
+\textbf{Ejemplo pregunta}: \emph{``¿Hay diferencia en la presión
+arterial antes y después del ejercicio?''}
+
+\begin{itemize}
+\tightlist
+\item
+  ✅ \textbf{Paired t-test} si: diferencias normales
+\item
+  ✅ \textbf{Wilcoxon signed-rank} si: outliers o no normalidad
+\end{itemize}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Si normal:}
+\FunctionTok{t.test}\NormalTok{(peso\_antes, peso\_despues, }\AttributeTok{paired =} \ConstantTok{TRUE}\NormalTok{)}
+
+\CommentTok{\# Si no normal:}
+\FunctionTok{wilcox.test}\NormalTok{(peso\_antes, peso\_despues, }\AttributeTok{paired =} \ConstantTok{TRUE}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{2 GRUPOS - INDEPENDIENTES}\label{grupos---independientes}
+
+\textbf{Ejemplo pregunta}: \emph{``¿Los hombres pesan más que las
+mujeres?''}
+
+\textbf{Ejemplo pregunta}: \emph{``¿Hay diferencia en el salario entre
+fumadores y no fumadores?''}
+
+\textbf{¿Datos normales y sin outliers?}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{SÍ} → Two-sample t-test
+\item
+  \textbf{NO} → Wilcoxon-Mann-Whitney
+\end{itemize}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Verificar normalidad primero:}
+\FunctionTok{shapiro.test}\NormalTok{(grupo1)}
+\FunctionTok{shapiro.test}\NormalTok{(grupo2)}
+
+\CommentTok{\# Verificar varianzas:}
+\FunctionTok{var.test}\NormalTok{(grupo1, grupo2)}
+
+\CommentTok{\# Si varianzas iguales:}
+\FunctionTok{t.test}\NormalTok{(grupo1, grupo2, }\AttributeTok{var.equal =} \ConstantTok{TRUE}\NormalTok{)}
+
+\CommentTok{\# Si varianzas diferentes:}
+\FunctionTok{t.test}\NormalTok{(grupo1, grupo2, }\AttributeTok{var.equal =} \ConstantTok{FALSE}\NormalTok{)}
+
+\CommentTok{\# Si no normal:}
+\FunctionTok{wilcox.test}\NormalTok{(grupo1, grupo2)}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{3+ GRUPOS independientes}\label{grupos-independientes}
+
+\textbf{Ejemplo pregunta}: \emph{``¿El peso varía entre personas de
+Asia, Europa y América?''}
+
+\textbf{Ejemplo pregunta}: \emph{``Compara el rendimiento académico
+entre 4 escuelas diferentes''}
+
+\textbf{¿Datos normales, varianzas homogéneas, sin outliers?}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{SÍ} → ✅ ANOVA
+\item
+  \textbf{NO} → ✅ Kruskal-Wallis
+\end{itemize}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Verificar:}
+\FunctionTok{shapiro.test}\NormalTok{(datos) }\CommentTok{\# para cada grupo}
+\FunctionTok{bartlett.test}\NormalTok{(variable }\SpecialCharTok{\textasciitilde{}}\NormalTok{ grupo)}
+
+\CommentTok{\# ANOVA:}
+\NormalTok{modelo }\OtherTok{\textless{}{-}} \FunctionTok{aov}\NormalTok{(variable }\SpecialCharTok{\textasciitilde{}}\NormalTok{ grupo)}
+\FunctionTok{summary}\NormalTok{(modelo)}
+
+\CommentTok{\# Si no paramétrico:}
+\FunctionTok{kruskal.test}\NormalTok{(variable }\SpecialCharTok{\textasciitilde{}}\NormalTok{ grupo)}
+\end{Highlighting}
+\end{Shaded}
+
+⚠️ \textbf{IMPORTANTE}: ANOVA/Kruskal-Wallis dicen ``hay diferencias''
+pero NO cuál grupo
+
+\newpage
+
+\subsection{VARIANZAS/DISPERSIONES}\label{varianzasdispersiones}
+
+\subsubsection{2 GRUPOS}\label{grupos}
+
+\textbf{Ejemplo pregunta}: \emph{``¿La variabilidad del peso es la misma
+en hombres y mujeres?''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{var.test}\NormalTok{(grupo1, grupo2)}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{3+ GRUPOS}\label{grupos-1}
+
+\textbf{Ejemplo pregunta}: \emph{``¿La dispersión de las notas es
+homogénea entre las 5 clases?''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{bartlett.test}\NormalTok{(notas }\SpecialCharTok{\textasciitilde{}}\NormalTok{ clase)}
+\end{Highlighting}
+\end{Shaded}
+
+\subsection{VARIABLES CATEGÓRICAS
+(asociación/independencia)}\label{variables-categuxf3ricas-asociaciuxf3nindependencia}
+
+\subsubsection{TABLA 2×2}\label{tabla-22}
+
+\textbf{Ejemplo pregunta}: \emph{``¿Ser catalán está asociado con ser
+del Barça?''}
+
+\textbf{Ejemplo pregunta}: \emph{``¿Hay asociación entre fumar y tener
+cáncer de pulmón?''}
+
+\textbf{Ejemplo pregunta}: \emph{``¿Jugar en casa afecta a las victorias
+del Real Sociedad?''}
+
+\textbf{¿Muestra pequeña (frecuencias esperadas \textless{} 5)?}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{SÍ} → ✅ Test de Fisher (exacto)
+\item
+  \textbf{NO} → ✅ Test de Chi-cuadrado
+\end{itemize}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Fisher (muestras pequeñas):}
+\FunctionTok{fisher.test}\NormalTok{(tabla, }\AttributeTok{alternative =} \StringTok{"greater"}\NormalTok{)}
+
+\CommentTok{\# Chi{-}cuadrado (muestras grandes):}
+\FunctionTok{chisq.test}\NormalTok{(tabla)}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{TABLA mayor que 2×2}\label{tabla-mayor-que-22}
+
+\textbf{Ejemplo pregunta}: \emph{``¿Hay asociación entre estado y
+población?''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{chisq.test}\NormalTok{(tabla)}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{PROPORCIÓN BINARIA}\label{proporciuxf3n-binaria}
+
+\textbf{Ejemplo pregunta}: \emph{``Paul el pulpo acertó 8 de 8 partidos.
+¿Es suerte?''}
+
+\textbf{Ejemplo pregunta}: \emph{``Una moneda salió cara 8 de 10 veces.
+¿Está trucada?''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{binom.test}\NormalTok{(}\DecValTok{8}\NormalTok{, }\DecValTok{10}\NormalTok{, }\AttributeTok{p =} \FloatTok{0.5}\NormalTok{, }\AttributeTok{alternative =} \StringTok{"greater"}\NormalTok{)}
+\FunctionTok{binom.test}\NormalTok{(}\DecValTok{8}\NormalTok{, }\DecValTok{8}\NormalTok{, }\AttributeTok{p =} \FloatTok{0.5}\NormalTok{, }\AttributeTok{alternative =} \StringTok{"greater"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\subsection{CUANDO NO SÉ LA DISTRIBUCIÓN /
+DUDAS}\label{cuando-no-suxe9-la-distribuciuxf3n-dudas}
+
+\subsubsection{Permutation Test}\label{permutation-test}
+
+\textbf{Ejemplo pregunta}: \emph{``Compara dos grupos con outliers y
+dudas sobre test''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Creas tu propia distribución nula permutando etiquetas}
+\NormalTok{diferencia\_observada }\OtherTok{\textless{}{-}} \FunctionTok{mean}\NormalTok{(grupo\_B) }\SpecialCharTok{{-}} \FunctionTok{mean}\NormalTok{(grupo\_A)}
+\NormalTok{datos\_combinados }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(grupo\_A, grupo\_B)}
+
+\NormalTok{diferencias\_simuladas }\OtherTok{\textless{}{-}} \FunctionTok{numeric}\NormalTok{(}\DecValTok{10000}\NormalTok{)}
+\ControlFlowTok{for}\NormalTok{ (i }\ControlFlowTok{in} \DecValTok{1}\SpecialCharTok{:}\DecValTok{10000}\NormalTok{) \{}
+\NormalTok{  datos\_permutados }\OtherTok{\textless{}{-}} \FunctionTok{sample}\NormalTok{(datos\_combinados)}
+\NormalTok{  grupo\_A\_sim }\OtherTok{\textless{}{-}}\NormalTok{ datos\_permutados[}\DecValTok{1}\SpecialCharTok{:}\FunctionTok{length}\NormalTok{(grupo\_A)]}
+\NormalTok{  grupo\_B\_sim }\OtherTok{\textless{}{-}}\NormalTok{ datos\_permutados[(}\FunctionTok{length}\NormalTok{(grupo\_A)}\SpecialCharTok{+}\DecValTok{1}\NormalTok{)}\SpecialCharTok{:}\FunctionTok{length}\NormalTok{(datos\_combinados)]}
+\NormalTok{  diferencias\_simuladas[i] }\OtherTok{\textless{}{-}} \FunctionTok{mean}\NormalTok{(grupo\_B\_sim) }\SpecialCharTok{{-}} \FunctionTok{mean}\NormalTok{(grupo\_A\_sim)}
+\NormalTok{\}}
+
+\NormalTok{p\_value }\OtherTok{\textless{}{-}} \FunctionTok{sum}\NormalTok{(}\FunctionTok{abs}\NormalTok{(diferencias\_simuladas) }\SpecialCharTok{\textgreater{}=} \FunctionTok{abs}\NormalTok{(diferencia\_observada)) }\SpecialCharTok{/} \DecValTok{10000}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{Bootstrap}\label{bootstrap}
+
+\textbf{Ejemplo pregunta}: \emph{``¿Cuál es el intervalo de confianza de
+la mediana?''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Remuestreo con reemplazo para estimar distribución}
+\NormalTok{medianas\_bootstrap }\OtherTok{\textless{}{-}} \FunctionTok{numeric}\NormalTok{(}\DecValTok{10000}\NormalTok{)}
+\ControlFlowTok{for}\NormalTok{(i }\ControlFlowTok{in} \DecValTok{1}\SpecialCharTok{:}\DecValTok{10000}\NormalTok{)\{}
+\NormalTok{  medianas\_bootstrap[i] }\OtherTok{\textless{}{-}} \FunctionTok{median}\NormalTok{(}\FunctionTok{sample}\NormalTok{(x, }\AttributeTok{size=}\FunctionTok{length}\NormalTok{(x), }\AttributeTok{replace=}\ConstantTok{TRUE}\NormalTok{))}
+\NormalTok{\}}
+\FunctionTok{quantile}\NormalTok{(medianas\_bootstrap, }\FunctionTok{c}\NormalTok{(}\FloatTok{0.025}\NormalTok{, }\FloatTok{0.975}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\newpage
+
+\section{VERIFICACIÓN DE SUPUESTOS}\label{verificaciuxf3n-de-supuestos}
+
+\subsection{¿Mis datos son normales?}\label{mis-datos-son-normales}
+
+\textbf{Ejemplo pregunta}: \emph{``Antes de hacer un t-test, verifica
+normalidad''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{shapiro.test}\NormalTok{(datos)}
+\CommentTok{\# H₀: datos son normales}
+\CommentTok{\# Si p \textless{} 0.05 → NO normales → USA }\AlertTok{TEST}\CommentTok{ NO PARAMÉTRICO}
+\end{Highlighting}
+\end{Shaded}
+
+\subsection{¿Hay outliers extremos?}\label{hay-outliers-extremos}
+
+\textbf{Ejemplo pregunta}: \emph{``Identifica valores atípicos en el
+dataset''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{boxplot}\NormalTok{(datos)}
+\CommentTok{\# Si hay muchos outliers → USA }\AlertTok{TEST}\CommentTok{ NO PARAMÉTRICO}
+\end{Highlighting}
+\end{Shaded}
+
+\subsection{¿Varianzas homogéneas?}\label{varianzas-homoguxe9neas}
+
+\textbf{Ejemplo pregunta}: \emph{``Verifica si puedes usar
+var.equal=TRUE''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# 2 grupos:}
+\FunctionTok{var.test}\NormalTok{(grupo1, grupo2)}
+
+\CommentTok{\# 3+ grupos:}
+\FunctionTok{bartlett.test}\NormalTok{(variable }\SpecialCharTok{\textasciitilde{}}\NormalTok{ grupo)}
+
+\CommentTok{\# Si p \textless{} 0.05 → varianzas diferentes}
+\CommentTok{\# En t{-}test: usa var.equal = FALSE}
+\end{Highlighting}
+\end{Shaded}
+
+\newpage
+
+\section{REGRESIÓN - ÁRBOL DE
+DECISIÓN}\label{regresiuxf3n---uxe1rbol-de-decisiuxf3n}
+
+\subsection{Y es CONTINUA (peso, precio,
+temperatura)}\label{y-es-continua-peso-precio-temperatura}
+
+\subsubsection{1 PREDICTOR}\label{predictor}
+
+\textbf{Ejemplo pregunta}: \emph{``¿Cómo afecta el peso del coche al
+consumo (mpg)?''}
+
+\textbf{Ejemplo pregunta}: \emph{``¿El BMI predice los gastos
+médicos?''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{modelo }\OtherTok{\textless{}{-}} \FunctionTok{lm}\NormalTok{(mpg }\SpecialCharTok{\textasciitilde{}}\NormalTok{ weight, }\AttributeTok{data =}\NormalTok{ datos)}
+\FunctionTok{summary}\NormalTok{(modelo)}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{MÚLTIPLES PREDICTORES}\label{muxfaltiples-predictores}
+
+\textbf{Ejemplo pregunta}: \emph{``¿Cómo afectan edad, BMI y fumar a los
+gastos médicos?''}
+
+\textbf{Ejemplo pregunta}: \emph{``Predice el precio de venta de una
+casa usando múltiples características''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{modelo }\OtherTok{\textless{}{-}} \FunctionTok{lm}\NormalTok{(charges }\SpecialCharTok{\textasciitilde{}}\NormalTok{ age }\SpecialCharTok{+}\NormalTok{ bmi }\SpecialCharTok{+}\NormalTok{ smoker, }\AttributeTok{data =}\NormalTok{ insurance)}
+\FunctionTok{summary}\NormalTok{(modelo)}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{VERIFICAR SUPUESTOS}\label{verificar-supuestos}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# 1. Linealidad}
+\FunctionTok{plot}\NormalTok{(datos}\SpecialCharTok{$}\NormalTok{Y }\SpecialCharTok{\textasciitilde{}}\NormalTok{ datos}\SpecialCharTok{$}\NormalTok{X)}
+
+\CommentTok{\# 2. Normalidad residuos}
+\FunctionTok{shapiro.test}\NormalTok{(}\FunctionTok{residuals}\NormalTok{(modelo))}
+
+\CommentTok{\# 3. Homocedasticidad}
+\FunctionTok{plot}\NormalTok{(modelo, }\AttributeTok{which =} \DecValTok{1}\NormalTok{)}
+
+\CommentTok{\# 4. Outliers influyentes}
+\FunctionTok{plot}\NormalTok{(modelo, }\AttributeTok{which =} \DecValTok{5}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{SI NO SE CUMPLEN
+SUPUESTOS}\label{si-no-se-cumplen-supuestos}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Transformación:}
+\NormalTok{modelo }\OtherTok{\textless{}{-}} \FunctionTok{lm}\NormalTok{(}\FunctionTok{log}\NormalTok{(Y) }\SpecialCharTok{\textasciitilde{}}\NormalTok{ X, }\AttributeTok{data =}\NormalTok{ datos)}
+\NormalTok{modelo }\OtherTok{\textless{}{-}} \FunctionTok{lm}\NormalTok{(}\FunctionTok{sqrt}\NormalTok{(Y) }\SpecialCharTok{\textasciitilde{}}\NormalTok{ X, }\AttributeTok{data =}\NormalTok{ datos)}
+\end{Highlighting}
+\end{Shaded}
+
+\subsection{Y es BINARIA (0/1, sí/no,
+enfermo/sano)}\label{y-es-binaria-01-suxedno-enfermosano}
+
+\textbf{Ejemplo pregunta}: \emph{``¿El BMI predice si un paciente tendrá
+un evento cardíaco?''}
+
+\textbf{Ejemplo pregunta}: \emph{``¿La edad predice si alguien aprueba
+el examen?''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{modelo }\OtherTok{\textless{}{-}} \FunctionTok{glm}\NormalTok{(evento\_cardiaco }\SpecialCharTok{\textasciitilde{}}\NormalTok{ BMI, }
+              \AttributeTok{family =} \FunctionTok{binomial}\NormalTok{(}\AttributeTok{link =} \StringTok{"logit"}\NormalTok{),}
+              \AttributeTok{data =}\NormalTok{ datos)}
+\FunctionTok{summary}\NormalTok{(modelo)}
+\end{Highlighting}
+\end{Shaded}
+
+\textbf{Distribución}: Binomial\\
+\textbf{Link}: logit\\
+\textbf{Y debe estar entre 0 y 1} (probabilidad)
+
+\subsection{Y es CONTEO (número entero ≥
+0)}\label{y-es-conteo-nuxfamero-entero-0}
+
+\textbf{Ejemplo pregunta}: \emph{``¿El BMI predice el número de visitas
+hospitalarias?''}
+
+\textbf{Ejemplo pregunta}: \emph{``Modela el número de accidentes según
+variables de tráfico''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{modelo }\OtherTok{\textless{}{-}} \FunctionTok{glm}\NormalTok{(num\_visitas }\SpecialCharTok{\textasciitilde{}}\NormalTok{ BMI, }
+              \AttributeTok{family =} \FunctionTok{poisson}\NormalTok{(}\AttributeTok{link =} \StringTok{"log"}\NormalTok{),}
+              \AttributeTok{data =}\NormalTok{ datos)}
+\FunctionTok{summary}\NormalTok{(modelo)}
+\end{Highlighting}
+\end{Shaded}
+
+\textbf{Distribución}: Poisson\\
+\textbf{Link}: log\\
+\textbf{Y debe ser ≥ 0} (conteos)
+
+\subsection{Y CONTINUA con PROBLEMAS}\label{y-continua-con-problemas}
+
+\textbf{Ejemplo pregunta}: \emph{``BMI vs gastos médicos tiene relación
+no lineal''}
+
+\subsubsection{Opción 1: Transformar Y}\label{opciuxf3n-1-transformar-y}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{modelo }\OtherTok{\textless{}{-}} \FunctionTok{lm}\NormalTok{(}\FunctionTok{log}\NormalTok{(charges) }\SpecialCharTok{\textasciitilde{}}\NormalTok{ BMI, }\AttributeTok{data =}\NormalTok{ datos)}
+\NormalTok{modelo }\OtherTok{\textless{}{-}} \FunctionTok{lm}\NormalTok{(}\FunctionTok{sqrt}\NormalTok{(charges) }\SpecialCharTok{\textasciitilde{}}\NormalTok{ BMI, }\AttributeTok{data =}\NormalTok{ datos)}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{Opción 2: GLM con Gamma}\label{opciuxf3n-2-glm-con-gamma}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{modelo }\OtherTok{\textless{}{-}} \FunctionTok{glm}\NormalTok{(charges }\SpecialCharTok{\textasciitilde{}}\NormalTok{ BMI, }
+              \AttributeTok{family =} \FunctionTok{Gamma}\NormalTok{(}\AttributeTok{link =} \StringTok{"log"}\NormalTok{),}
+              \AttributeTok{data =}\NormalTok{ datos)}
+\end{Highlighting}
+\end{Shaded}
+
+\newpage
+
+\section{SCREENING DE VARIABLES}\label{screening-de-variables}
+
+\subsection{¿Tengo 10+ variables
+predictoras?}\label{tengo-10-variables-predictoras}
+
+\textbf{Ejemplo pregunta}: \emph{``Dataset con 80 predictores,
+identifica los significativos''}
+
+\textbf{PROBLEMA}: Muchos tests → \textasciitilde5\% falsos positivos
+esperados
+
+\subsubsection{Corrección FDR
+(Benjamini-Hochberg)}\label{correcciuxf3n-fdr-benjamini-hochberg}
+
+✅ \textbf{USA ESTO en análisis exploratorios}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Hacer muchas regresiones y guardar p{-}values}
+\NormalTok{p\_values }\OtherTok{\textless{}{-}} \FunctionTok{numeric}\NormalTok{(}\FunctionTok{length}\NormalTok{(predictores))}
+\ControlFlowTok{for}\NormalTok{(i }\ControlFlowTok{in} \DecValTok{1}\SpecialCharTok{:}\FunctionTok{length}\NormalTok{(predictores)) \{}
+\NormalTok{  modelo }\OtherTok{\textless{}{-}} \FunctionTok{lm}\NormalTok{(Y }\SpecialCharTok{\textasciitilde{}}\NormalTok{ datos[,predictores[i]])}
+\NormalTok{  p\_values[i] }\OtherTok{\textless{}{-}} \FunctionTok{summary}\NormalTok{(modelo)}\SpecialCharTok{$}\NormalTok{coefficients[}\DecValTok{2}\NormalTok{,}\DecValTok{4}\NormalTok{]}
+\NormalTok{\}}
+
+\CommentTok{\# Corrección FDR}
+\NormalTok{p\_adjusted }\OtherTok{\textless{}{-}} \FunctionTok{p.adjust}\NormalTok{(p\_values, }\AttributeTok{method =} \StringTok{"BH"}\NormalTok{)}
+
+\CommentTok{\# Ver cuáles siguen siendo significativos}
+\NormalTok{significant }\OtherTok{\textless{}{-}} \FunctionTok{which}\NormalTok{(p\_adjusted }\SpecialCharTok{\textless{}} \FloatTok{0.05}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{Corrección Bonferroni}\label{correcciuxf3n-bonferroni}
+
+Solo si DEBES evitar TODO falso positivo
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{p\_adjusted }\OtherTok{\textless{}{-}} \FunctionTok{p.adjust}\NormalTok{(p\_values, }\AttributeTok{method =} \StringTok{"bonferroni"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\newpage
+
+\section{REDUCCIÓN DE
+DIMENSIONALIDAD}\label{reducciuxf3n-de-dimensionalidad}
+
+\subsection{VISUALIZACIÓN}\label{visualizaciuxf3n}
+
+\textbf{Ejemplo pregunta}: \emph{``Tienes datos de 60 sensores,
+visualiza patrones''}
+
+\textbf{Ejemplo pregunta}: \emph{``Visualiza jugadores de fútbol según
+30+ atributos''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# PCA}
+\NormalTok{pca\_result }\OtherTok{\textless{}{-}} \FunctionTok{prcomp}\NormalTok{(datos, }\AttributeTok{center =} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{scale. =} \ConstantTok{TRUE}\NormalTok{)}
+
+\CommentTok{\# Ver varianza explicada}
+\FunctionTok{summary}\NormalTok{(pca\_result)}
+
+\CommentTok{\# Visualizar}
+\FunctionTok{plot}\NormalTok{(pca\_result}\SpecialCharTok{$}\NormalTok{x[,}\DecValTok{1}\NormalTok{], pca\_result}\SpecialCharTok{$}\NormalTok{x[,}\DecValTok{2}\NormalTok{], }
+     \AttributeTok{col =}\NormalTok{ grupos, }\AttributeTok{pch =} \DecValTok{19}\NormalTok{,}
+     \AttributeTok{xlab =} \StringTok{"PC1"}\NormalTok{, }\AttributeTok{ylab =} \StringTok{"PC2"}\NormalTok{)}
+\FunctionTok{legend}\NormalTok{(}\StringTok{"topright"}\NormalTok{, }\AttributeTok{legend =} \FunctionTok{levels}\NormalTok{(grupos), }
+       \AttributeTok{col =} \DecValTok{1}\SpecialCharTok{:}\FunctionTok{length}\NormalTok{(}\FunctionTok{levels}\NormalTok{(grupos)), }\AttributeTok{pch =} \DecValTok{19}\NormalTok{)}
+
+\CommentTok{\# Con ggplot}
+\FunctionTok{library}\NormalTok{(ggplot2)}
+\NormalTok{data\_pca }\OtherTok{\textless{}{-}} \FunctionTok{data.frame}\NormalTok{(}\AttributeTok{PC1 =}\NormalTok{ pca\_result}\SpecialCharTok{$}\NormalTok{x[,}\DecValTok{1}\NormalTok{],}
+                       \AttributeTok{PC2 =}\NormalTok{ pca\_result}\SpecialCharTok{$}\NormalTok{x[,}\DecValTok{2}\NormalTok{],}
+                       \AttributeTok{grupo =}\NormalTok{ grupos)}
+\FunctionTok{ggplot}\NormalTok{(data\_pca, }\FunctionTok{aes}\NormalTok{(PC1, PC2, }\AttributeTok{color =}\NormalTok{ grupo)) }\SpecialCharTok{+}
+  \FunctionTok{geom\_point}\NormalTok{() }\SpecialCharTok{+}
+  \FunctionTok{theme\_minimal}\NormalTok{()}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{¿Cuántos componentes
+usar?}\label{cuuxe1ntos-componentes-usar}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Scree plot}
+\FunctionTok{plot}\NormalTok{(pca\_result, }\AttributeTok{type =} \StringTok{"l"}\NormalTok{)}
+
+\CommentTok{\# Varianza explicada acumulada}
+\FunctionTok{cumsum}\NormalTok{(pca\_result}\SpecialCharTok{$}\NormalTok{sdev}\SpecialCharTok{\^{}}\DecValTok{2} \SpecialCharTok{/} \FunctionTok{sum}\NormalTok{(pca\_result}\SpecialCharTok{$}\NormalTok{sdev}\SpecialCharTok{\^{}}\DecValTok{2}\NormalTok{))}
+\CommentTok{\# Típicamente: 80{-}90\% de varianza}
+\end{Highlighting}
+\end{Shaded}
+
+\subsection{ELIMINAR
+MULTICOLINEALIDAD}\label{eliminar-multicolinealidad}
+
+\textbf{Ejemplo pregunta}: \emph{``20 predictores correlacionados antes
+de regresión''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{pca\_result }\OtherTok{\textless{}{-}} \FunctionTok{prcomp}\NormalTok{(predictores, }\AttributeTok{center =} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{scale. =} \ConstantTok{TRUE}\NormalTok{)}
+\CommentTok{\# Usa los primeros n componentes}
+\NormalTok{datos\_pca }\OtherTok{\textless{}{-}}\NormalTok{ pca\_result}\SpecialCharTok{$}\NormalTok{x[, }\DecValTok{1}\SpecialCharTok{:}\DecValTok{5}\NormalTok{]}
+\NormalTok{modelo }\OtherTok{\textless{}{-}} \FunctionTok{lm}\NormalTok{(Y }\SpecialCharTok{\textasciitilde{}}\NormalTok{ datos\_pca)}
+\end{Highlighting}
+\end{Shaded}
+
+\newpage
+
+\section{DISEÑO EXPERIMENTAL}\label{diseuxf1o-experimental}
+
+\subsection{¿Cuántas muestras
+necesito?}\label{cuuxe1ntas-muestras-necesito}
+
+\textbf{Ejemplo pregunta}: \emph{``¿Cuántos pacientes necesitas para
+comparar dos tratamientos?''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{library}\NormalTok{(pwr)}
+
+\CommentTok{\# Para t{-}test}
+\FunctionTok{pwr.t.test}\NormalTok{(}\AttributeTok{d =} \FloatTok{0.5}\NormalTok{,           }\CommentTok{\# effect size}
+           \AttributeTok{sig.level =} \FloatTok{0.05}\NormalTok{,   }\CommentTok{\# alfa}
+           \AttributeTok{power =} \FloatTok{0.8}\NormalTok{,        }\CommentTok{\# poder deseado}
+           \AttributeTok{type =} \StringTok{"two.sample"}\NormalTok{)}
+
+\CommentTok{\# Para ANOVA}
+\FunctionTok{pwr.anova.test}\NormalTok{(}\AttributeTok{k =} \DecValTok{3}\NormalTok{,          }\CommentTok{\# número de grupos}
+               \AttributeTok{f =} \FloatTok{0.25}\NormalTok{,       }\CommentTok{\# effect size}
+               \AttributeTok{sig.level =} \FloatTok{0.05}\NormalTok{,}
+               \AttributeTok{power =} \FloatTok{0.8}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\subsection{¿Tengo una fuente conocida de
+variabilidad?}\label{tengo-una-fuente-conocida-de-variabilidad}
+
+\textbf{Ejemplo pregunta}: \emph{``Comparas 3 dietas pero el género
+afecta al peso''}
+
+\textbf{Ejemplo pregunta}: \emph{``Experimento con zapatos: cada persona
+prueba ambos materiales''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Diseño de bloques}
+\NormalTok{modelo }\OtherTok{\textless{}{-}} \FunctionTok{aov}\NormalTok{(peso }\SpecialCharTok{\textasciitilde{}}\NormalTok{ dieta }\SpecialCharTok{+}\NormalTok{ genero, }\AttributeTok{data =}\NormalTok{ datos)}
+\FunctionTok{summary}\NormalTok{(modelo)}
+
+\CommentTok{\# SIN bloques (PEOR):}
+\NormalTok{modelo\_malo }\OtherTok{\textless{}{-}} \FunctionTok{aov}\NormalTok{(peso }\SpecialCharTok{\textasciitilde{}}\NormalTok{ dieta, }\AttributeTok{data =}\NormalTok{ datos)}
+\FunctionTok{summary}\NormalTok{(modelo\_malo)}
+\end{Highlighting}
+\end{Shaded}
+
+\subsection{¿Quiero explorar muchos factores
+eficientemente?}\label{quiero-explorar-muchos-factores-eficientemente}
+
+\textbf{Ejemplo pregunta}: \emph{``Tienes 7 factores, saber cuáles son
+importantes''}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{library}\NormalTok{(FrF2)}
+
+\CommentTok{\# 7 factores, solo 8 experimentos (2\^{}(7{-}4))}
+\NormalTok{design }\OtherTok{\textless{}{-}} \FunctionTok{FrF2}\NormalTok{(}\AttributeTok{nruns =} \DecValTok{8}\NormalTok{, }\AttributeTok{nfactors =} \DecValTok{7}\NormalTok{, }\AttributeTok{randomize =} \ConstantTok{FALSE}\NormalTok{)}
+
+\CommentTok{\# Añadir respuesta}
+\NormalTok{design }\OtherTok{\textless{}{-}} \FunctionTok{add.response}\NormalTok{(design, respuesta)}
+
+\CommentTok{\# Analizar}
+\NormalTok{modelo }\OtherTok{\textless{}{-}} \FunctionTok{lm}\NormalTok{(design, }\AttributeTok{degree =} \DecValTok{1}\NormalTok{)}
+\FunctionTok{summary}\NormalTok{(modelo)}
+\end{Highlighting}
+\end{Shaded}
+
+\newpage
+
+\section{TABLA RESUMEN RÁPIDA}\label{tabla-resumen-ruxe1pida}
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule\noalign{}
+Pregunta del Examen & Test/Método \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+¿Los hombres pesan más que las mujeres? & \textbf{t-test} \\
+Hay outliers extremos + comparar grupos & \textbf{Wilcoxon} \\
+Compara el peso entre 4 países & \textbf{ANOVA} \\
+Compara 3 estados con outliers & \textbf{Kruskal-Wallis} \\
+¿La variabilidad es igual en ambos grupos? & \textbf{F-test} \\
+¿Ser del Barça está asociado con ser catalán? & \textbf{Fisher/Chi²} \\
+¿Jugar en casa afecta a victorias? (2×2) & \textbf{Fisher/Chi²} \\
+¿El peso del coche afecta al consumo? & \textbf{lm()} \\
+¿Edad, BMI y fumar predicen gastos? & \textbf{lm()} múltiple \\
+¿BMI predice eventos cardíacos (sí/no)? & \textbf{glm(binomial)} \\
+¿BMI predice número de visitas (0,1,2,\ldots)? &
+\textbf{glm(poisson)} \\
+Visualiza 60 sensores en 2D & \textbf{PCA} \\
+Muchas variables, cuáles son significativas & \textbf{FDR} \\
+¿Los datos son normales? & \textbf{Shapiro-Wilk} \\
+Comparar 3 dietas controlando por género & \textbf{Blocking} \\
+¿Cuántos pacientes necesito? & \textbf{pwr.t.test()} \\
+\end{longtable}
+
+\section{CHECKLIST RÁPIDO}\label{checklist-ruxe1pido}
+
+\textbf{PASO 1: ¿Qué me están preguntando?}
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  Comparar grupos → Tests de hipótesis
+\item[$\square$]
+  Modelar relación → Regresión
+\item[$\square$]
+  Visualizar → PCA
+\item[$\square$]
+  Diseñar experimento → Power analysis
+\end{itemize}
+
+\textbf{PASO 2: Si es COMPARAR:}
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  ¿Qué tipo? Continua/Categórica/Conteo
+\item[$\square$]
+  ¿Cuántos grupos? 1/2/3+
+\item[$\square$]
+  ¿Normal? → Shapiro
+\item[$\square$]
+  ¿Outliers? → Boxplot
+\item[$\square$]
+  ¿Independientes o relacionados?
+\end{itemize}
+
+\textbf{PASO 3: Si es MODELAR:}
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  ¿Y es continua/binaria/conteo?
+\item[$\square$]
+  ¿Cuántos X?
+\item[$\square$]
+  Verificar supuestos después
+\end{itemize}
+
+\textbf{PASO 4: Si son MUCHAS variables:}
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  Aplicar corrección FDR
+\end{itemize}
+
+\textbf{PASO 5: Si es VISUALIZAR:}
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  PCA y colorear por grupos
+\end{itemize}
+
+\section{ERRORES COMUNES A EVITAR}\label{errores-comunes-a-evitar}
+
+❌ Comparar dos grupos con outliers usando t-test\\
+→ ✅ Usa Wilcoxon
+
+❌ Usar ANOVA sin verificar normalidad\\
+→ ✅ Primero Shapiro-Wilk, si no normal usa Kruskal-Wallis
+
+❌ Modelar probabilidad de enfermedad con lm()\\
+→ ✅ Usa glm(family=binomial)
+
+❌ Probar 100 variables sin corrección múltiple\\
+→ ✅ Aplica p.adjust(method=``BH'')
+
+❌ Usar Chi² con frecuencias de 3\\
+→ ✅ Usa Fisher para muestras pequeñas
+
+❌ Hacer regresión sin graficar datos primero\\
+→ ✅ Siempre plot(Y \textasciitilde{} X) primero
+
+❌ PCA sin normalizar variables de diferentes escalas\\
+→ ✅ Usa scale=TRUE en prcomp()
+
+❌ Comparar dietas ignorando que género afecta\\
+→ ✅ Usa diseño de bloques
+
+\end{document}

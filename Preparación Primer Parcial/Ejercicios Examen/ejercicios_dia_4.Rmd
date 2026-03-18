@@ -1,0 +1,908 @@
+---
+title: "Ejercicios día 4"
+output: 
+  html_document:
+    toc: true
+date: "2025-09-30"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Los ejercicios que se presentan en este documento son sobre Visualización y Análisis de Datos en R. Los ejercicios del primer examen se van a parecer a estos ejercicios.
+
+Librerías que vamos a necesitar:
+
+```{r libraries,warning=FALSE,message=FALSE}
+library(ggplot2)
+library(viridis)
+library(ggrepel)
+library(dplyr)
+library(tm)
+library(textstem)
+library(pwr)
+library(tidyr)
+library(stringr)
+```
+
+# Ejercicio 1
+
+Importar el reporte hitórico de crimenes en EEUU desde 1977 hasta 1999. Este data set contiene información sobre diferentes tipos de crimenes en los 51 estados durante el periodo de tiempo señalado. Además contiene información sobre la población, renta per capita, etc.
+
+Información sobre estos datos se puede encontrar en el siguiente <a href="https://vincentarelbundock.github.io/Rdatasets/doc/AER/Guns.html" target="_blank">link</a>.
+
+
+**Cargar crimeUS.csv**
+
+```{r}
+crime_data <- read.csv('data/CrimeUS.csv', header = T, sep = ',', stringsAsFactors = F)
+```
+
+### 1.1
+**Generar una imagen para visualizar rápidamente qué estados y en que años hubo más robos. En la gráfica se debe poder visualizar la evolución del número de robos para cada estado de forma sencilla**
+
+```{r, fig.height=5, fig.width=10}
+ggplot(crime_data, aes(x = state, y = year, fill = robbery)) +
+  geom_tile(color = NA) +
+  scale_fill_viridis(option = "plasma", name = "Robos", begin = 0, end = 1, direction = 1) +
+  theme(
+    panel.background = element_rect(fill = "black"),
+    plot.background = element_rect(fill = "black"),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, color = "white", size = 7),
+    axis.text.y = element_text(color = "white", size = 7),
+    axis.title = element_text(color = "white"),
+    plot.title = element_text(color = "white"),
+    legend.background = element_rect(fill = "black"),
+    legend.text = element_text(color = "white"),
+    legend.title = element_text(color = "white"),
+    panel.grid = element_blank()
+  ) +
+  labs(
+    title = "Evolución de Robos por Estado (1977-1999)",
+    x = "Estado",
+    y = "Año"
+  )
+```
+
+### 1.2
+**Generar una gráfica para visualizar en cada año, el número total de cada tipo de crimen También se pide generar una tabla con esta información**
+
+```{r}
+# Tabla: sumar cada tipo de crimen por año
+crime_totals <- crime_data %>%
+  group_by(year) %>%
+  summarise(
+    Violent = sum(violent, na.rm = TRUE),
+    Murder = sum(murder, na.rm = TRUE),
+    Robbery = sum(robbery, na.rm = TRUE)
+  )
+
+crime_totals # Mostrar la tabla
+
+# Transformar a formato largo para ggplot2
+crime_totals_long <- crime_totals %>%
+  pivot_longer(cols = c(Violent, Murder, Robbery), names_to = "Crime", values_to = "Total")
+
+# Diagrama de barras
+ggplot(crime_totals_long, aes(x = factor(year), y = Total, fill = Crime)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = c("Violent" = "#F8766D", "Murder" = "#00BFC4", "Robbery" = "#7CAE00")) +
+  theme_minimal() +
+  labs(
+    title = "Número total de cada tipo de crimen por año",
+    x = "Año",
+    y = "Total de crímenes",
+    fill = "Tipo de crimen"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+```
+
+```{r}
+
+
+```
+
+### 1.3
+**Generar una gráfica para visualizar en cada año, la proporción de cada tipo de crimen.**
+
+```{r}
+# Calcular totales y proporciones por año
+crime_props <- crime_data %>%
+  group_by(year) %>%
+  summarise(
+    Violent = sum(violent, na.rm = TRUE),
+    Murder = sum(murder, na.rm = TRUE),
+    Robbery = sum(robbery, na.rm = TRUE)
+  ) %>%
+  mutate(Total = Violent + Murder + Robbery) %>%
+  mutate(
+    Violent = Violent / Total,
+    Murder = Murder / Total,
+    Robbery = Robbery / Total
+  ) %>%
+  select(-Total)
+
+# Formato largo para ggplot2
+crime_props_long <- crime_props %>%
+  pivot_longer(cols = c(Violent, Murder, Robbery), names_to = "Crime", values_to = "Proportion")
+
+# Gráfica de barras apiladas
+ggplot(crime_props_long, aes(x = factor(year), y = Proportion, fill = Crime)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("Violent" = "#F8766D", "Murder" = "#00BFC4", "Robbery" = "#7CAE00")) +
+  theme_minimal() +
+  labs(
+    title = "Proporción de cada tipo de crimen por año",
+    x = "Año",
+    y = "Proporción",
+    fill = "Tipo de crimen"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+```
+
+
+```
+
+
+### 1.4
+**Generar una imagen para visualizar el número de presos que hubo cada año entre 1980 y 1990 distinguiendo entre los estados de Alabama, Arizona y Florida.**
+
+```{r}
+# Filtrar datos
+prison_data <- crime_data %>%
+  filter(year >= 1980 & year <= 1990, state %in% c("Alabama", "Arizona", "Florida"))
+
+# Gráfica de barras agrupadas
+ggplot(prison_data, aes(x = factor(year), y = prisoners, fill = state)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.85) +
+  scale_fill_manual(values = c("Alabama" = "#F8766D", "Arizona" = "#00BFC4", "Florida" = "#7CAE00")) +
+  theme_minimal(base_family = "sans") +
+  labs(
+    title = "Número de presos por año (1980-1990)",
+    x = "Año",
+    y = "Número de presos",
+    fill = "Estado"
+  ) 
+```
+
+### 1.5
+**¿El número de presos es diferente entre los 3 estados?**
+
+```{r}
+# Test estadístico ANOVA
+prison_data <- crime_data %>%
+  filter(year >= 1980 & year <= 1990, state %in% c("Alabama", "Arizona", "Florida"))
+
+anova_result <- aov(prisoners ~ state, data = prison_data)
+summary(anova_result)
+
+# Visualización con boxplot
+ggplot(prison_data, aes(x = state, y = prisoners, fill = state)) +
+  geom_boxplot(width = 0.7, alpha = 0.8) +
+  scale_fill_manual(values = c("Alabama" = "#F8766D", "Arizona" = "#00BFC4", "Florida" = "#7CAE00")) +
+  theme_minimal(base_family = "sans") +
+  labs(
+    title = "Distribución del número de presos por estado (1980-1990)",
+    x = "Estado",
+    y = "Número de presos",
+    fill = "Estado"
+  )
+```
+
+### 1.6
+**Generar una imagen para visualizar la distribución del número de robos y prisioneros en cada año, comparando ambas variables simultáneamente.**
+
+````{r}
+# Sumar robos y prisioneros por año y pasar a formato largo
+rob_pris <- crime_data %>%
+  group_by(year) %>%
+  summarise(
+    Robos = sum(robbery, na.rm = TRUE),
+    Prisioneros = sum(prisoners, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = c(Robos, Prisioneros), names_to = "Variable", values_to = "Valor")
+
+# Diagrama de barras agrupadas
+ggplot(rob_pris, aes(x = factor(year), y = Valor, fill = Variable)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.85) +
+  scale_fill_manual(values = c("Robos" = "#F8766D", "Prisioneros" = "#00BFC4")) +
+  theme_minimal(base_family = "sans") +
+  labs(
+    title = "Comparación anual de robos y prisioneros",
+    x = "Año",
+    y = "Cantidad",
+    fill = "Variable"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5)
+  )
+```
+
+
+### 1.7
+
+**Ahora nos vamos a centrar en el estado de Nevada. Queremos saber que tipo de crimen tiene mayor correlación con el número de prisioneros. Para realizar el test estadístico correpondiente se puede utilizar la función `cor.test()`. Finalmente, generar una gráfica para visualizar la correlación del ese tipo de crimen con el número de prisioneros**
+
+
+```{r}
+# Filtrar datos de Nevada
+nevada_data <- crime_data %>% 
+  filter(state == "Nevada") %>%
+  mutate(
+    violent = as.numeric(violent),
+    murder = as.numeric(murder),
+    robbery = as.numeric(robbery),
+    prisoners = as.numeric(prisoners)
+  )
+
+# Calcular correlaciones con prisoners para cada tipo de crimen
+correlations <- c(
+  violent = cor(nevada_data$violent, nevada_data$prisoners, use = "complete.obs"),
+  murder = cor(nevada_data$murder, nevada_data$prisoners, use = "complete.obs"),
+  robbery = cor(nevada_data$robbery, nevada_data$prisoners, use = "complete.obs")
+)
+
+# Mostrar correlaciones
+print(correlations)
+
+# Identificar el tipo de crimen con mayor correlación
+max_crime <- names(which.max(abs(correlations)))
+cat("\nTipo de crimen con mayor correlación:", max_crime, "\n")
+cat("Correlación:", correlations[max_crime], "\n\n")
+
+# Test estadístico
+test_result <- cor.test(nevada_data[[max_crime]], nevada_data$prisoners)
+print(test_result)
+
+# Visualización
+ggplot(nevada_data, aes(x = .data[[max_crime]], y = prisoners)) +
+  geom_point(size = 3, alpha = 0.6, color = "steelblue") +
+  geom_smooth(method = "lm", se = TRUE, color = "darkred", linewidth = 1.2) +
+  geom_text_repel(aes(label = year), size = 2.5, max.overlaps = 10) +
+  labs(title = paste("Correlación entre", max_crime, "y Prisioneros en Nevada"),
+       subtitle = paste("r =", round(correlations[max_crime], 3), 
+                       "| p-value =", format.pval(test_result$p.value, digits = 3)),
+       x = max_crime,
+       y = "Número de Prisioneros") +
+  theme_minimal()
+```
+
+
+### 1.8
+
+**Se quiere comprobar para cada estado si el número de asesinatos es diferente entre los años pasados (1977-1988) y los años más recientes(1989-1999). Finalmente, se pide visualizar estos resultados en una gráfica** 
+
+
+```{r}
+# Crear variable de periodo
+crime_data <- crime_data %>%
+  mutate(
+    murder = as.numeric(murder),
+    year = as.numeric(year),
+    periodo = ifelse(year <= 1988, "1977-1988", "1989-1999")
+  )
+
+# Test t para cada estado
+resultados <- crime_data %>%
+  group_by(state) %>%
+  summarise(
+    p_value = t.test(murder[periodo == "1977-1988"], 
+                     murder[periodo == "1989-1999"])$p.value,
+    mean_pasado = mean(murder[periodo == "1977-1988"], na.rm = TRUE),
+    mean_reciente = mean(murder[periodo == "1989-1999"], na.rm = TRUE),
+    diferencia = mean_reciente - mean_pasado,
+    ) %>%
+  mutate(
+    p_adjusted = p.adjust(p_value, method = "BH"),
+    significativo = ifelse(p_adjusted < 0.05, "Sí", "No")
+  )
+
+print(resultados)
+
+# Visualización
+ggplot(resultados, aes(x = reorder(state, diferencia), y = diferencia, fill = significativo)) +
+  geom_col() +
+  scale_fill_manual(values = c("No" = "gray70", "Sí" = "darkred")) +
+  coord_flip() +
+  labs(title = "Diferencia en Asesinatos entre Periodos por Estado",
+       subtitle = "1989-1999 vs 1977-1988",
+       x = "Estado",
+       y = "Diferencia en Asesinatos (Reciente - Pasado)",
+       fill = "Significativo\n(p < 0.05)") +
+  theme_minimal()
+```
+
+
+
+# Ejercicio 2
+
+Este ejercicio corresponde al examen del curso 22/23. La única diferencia es que se han modificado los enunciado para que no sea "tan fácil".
+
+Los datos de este ejercicio tratan sobre mensajes, distinguiendo entre mensajes deseados "HAM" y mensajes no deseados "SPAM". La base de datos incluye el contenido de cada mensaje.
+
+**cargar los archivos spam.csv**
+
+```{r}
+data1 <- read.csv('./data/spam.csv', 
+                  header = T, sep = ',', stringsAsFactors = F,
+                  check.names = F, fileEncoding = 'latin1')
+# Delete columns 3,4 and 5 (son columnas vacias)
+data1 <- data1[,1:2]
+colnames(data1) <- c('Class', 'Message')
+
+```
+
+
+**Modificar la columna 'Message' para que todas las letras estén en minúsculas. Se puede utilizar la función `tolower()`. También se pide quitar los signos de puntuación, dígitos y "stop words". Para esto utilizar la librería `tm`.**
+
+Los "stop words" son palabras que no añaden información. En el campo de Procesamiento del Lenguaje (NPL) es uno de las etapas iniciales. Aunque parezca que se pierde información, la realidad es que estas palabras son inecesarias.
+
+```{r}
+data2 <- data1
+data2[,2] <- tolower(data2[,2])
+data2[,2] <- removePunctuation(data2[,2])
+data2[,2] <- removeNumbers(data2[,2])
+data2[,2] <- removeWords(data2[,2], stopwords("english"))
+```
+
+
+**Eliminar en la columna 'Message' las palabras que tengan menos de 3 letras**
+
+```{r}
+tmp <- unlist(strsplit(data2[,2], " "))
+wordsL3 <- tmp[nchar(tmp)<=3]
+tmp1 <- duplicated(wordsL3)
+wordsL3 <- wordsL3[!duplicated(wordsL3)]
+data2[,2] <- removeWords(data2[,2], wordsL3)
+```
+
+
+### 2.1
+
+**Calcular para cada mensaje la longitud media de las palabras que forman el mensaje. Para esto, primero vamos a transformar cada palabra en su forma base (conocido como lema). Esto se puede hacer utilizando la función `lemmatize_words()`. Para calcular la media no se deben tener en cuenta palabras base con longitud menor a 3.**
+
+A modo de ejemplo de como funciona esta función:
+
+```{r}
+lemmatize_words("driving")
+# driving -> drive
+```
+
+```{r}
+# Calcular longitud media de palabras por mensaje
+data2$avg_word_length <- sapply(strsplit(data2$Message, " "), function(words) {
+  # Lematizar cada palabra
+  lemmas <- lemmatize_words(words)
+  
+  # Filtrar palabras con 3 o más letras
+  lemmas <- lemmas[nchar(lemmas) >= 3]
+  
+  # Calcular media de longitud si hay palabras válidas
+  if (length(lemmas) > 0) {
+    mean(nchar(lemmas))
+  } else {
+    NA  # si no quedan palabras, devuelve NA
+  }
+})
+```
+
+
+### 2.2 
+
+**¿la longitud media de las palabras que forman los mensajes (calculado en el apartado anterior) es diferente para los mensajes tipo "Spam" y tipo "Ham"? Realiza una gráfica para mostrar esta comparación.**
+
+```{r}
+ggplot(na.omit(data2), aes(x = Class, y = avg_word_length, fill = Class)) +
+  geom_boxplot(alpha = 0.6, outlier.alpha = 0.3) +
+  stat_summary(fun = mean, geom = "point", shape = 20, size = 3, color = "red") +
+  labs(title = "Comparación de longitud media de palabras",
+       x = "Tipo de mensaje", 
+       y = "Longitud media de palabras") +
+  theme_minimal() +
+  scale_fill_viridis(discrete = TRUE, alpha = 0.7)
+```
+
+
+### 2.3
+
+**Se pide construir una matriz Y que contenga para cada mensaje (fila) la cantidad de veces que aparece cada palabra (columnas). La matriz Y tendrá por tanto 5479 filas (número de mensajes) y xxx columnas (siendo xxx el número de palabras distintas**
+
+```{r}
+# Creamos un corpus con los mensajes ya limpiados
+corpus <- Corpus(VectorSource(data2$Message))
+
+# Creamos la matriz documento-término
+dtm <- DocumentTermMatrix(corpus)
+
+# Convertimos a matriz base de R
+Y <- as.matrix(dtm)
+
+# Revisar dimensiones
+dim(Y)   # debería dar 5479 filas x nº de palabras distintas
+```
+
+
+**Crear una matriz X que resulte de eliminar palabras que tengan una frecuencia menor a 50. Es decir, palabras que en total hayan aparecido menos de 50 veces. La matriz resultante debe tener 5479 filas y 119 columnas.**
+
+```{r}
+# Sumar la frecuencia de cada palabra en todas las filas
+word_totals <- colSums(Y)
+
+# Seleccionar solo las palabras que aparecen 50 veces o más
+words_keep <- names(word_totals[word_totals >= 50])
+
+# Crear la nueva matriz X
+X <- Y[, words_keep]
+
+# Revisar dimensiones
+dim(X)
+```
+
+
+**Realizar una gráfica en 2D que resuma, en la medida de lo posible, el máximo de información que contienen las columnas de la matriz X. En la gráfica debe distinguir entre los mensajes tipo "ham" y tipo "spam".**
+
+```{r}
+# Reducir dimensionalidad con PCA
+pca_res <- prcomp(X, center = TRUE, scale. = TRUE)
+
+# Crear dataframe con las dos primeras componentes
+pca_df <- data.frame(
+  PC1 = pca_res$x[,1],
+  PC2 = pca_res$x[,2],
+  Class = data2$Class
+)
+
+# Graficar
+ggplot(pca_df, aes(x = PC1, y = PC2, color = Class)) +
+  geom_point(alpha = 0.6, size = 2) +
+  labs(title = "Reducción a 2D de la matriz X con PCA",
+       x = "Componente Principal 1",
+       y = "Componente Principal 2") +
+  theme_minimal() +
+  scale_color_viridis(discrete = TRUE, option = "D")
+```
+
+**Con la información obtenida de la gráfica anterior, ¿hay algún eje de la gráfica donde se pueda distinguir entre los mensajes tipo "ham" y tipo "spam"? En caso de que sea así, ¿que variables de X son las que más influyen en ese eje?**
+
+```{r}
+# PCA sobre la matriz X
+pca_res <- prcomp(X, center = TRUE, scale. = TRUE)
+
+# Crear dataframe con las primeras componentes y la clase
+pca_df <- data.frame(pca_res$x[,1:10], Class = data2$Class)  # primeras 10 PCs
+
+# Calcular la diferencia absoluta de medias entre clases para cada PC
+diff_means <- sapply(1:10, function(i){
+  abs(tapply(pca_df[,i], pca_df$Class, mean)[1] - 
+      tapply(pca_df[,i], pca_df$Class, mean)[2])
+})
+
+# Eje que mejor separa
+best_PC <- which.max(diff_means)
+best_PC
+
+# Graficar densidad de ese eje
+library(ggplot2)
+library(viridis)
+
+ggplot(pca_df, aes_string(x = paste0("PC", best_PC), fill = "Class")) +
+  geom_density(alpha = 0.6) +
+  labs(title = paste("Distribución de PC", best_PC, "según tipo de mensaje"),
+       x = paste("Componente Principal", best_PC),
+       y = "Densidad") +
+  theme_minimal() +
+  scale_fill_viridis(discrete = TRUE, option = "D")
+
+# Identificar las 10 palabras que más influyen en ese eje
+loadings <- pca_res$rotation  # contribución de cada palabra
+top_words <- sort(abs(loadings[,best_PC]), decreasing = TRUE)[1:10]
+top_words
+
+```
+
+
+  **¿Están estas 5 palabras relacionadas con que el mensaje sea "spam" o sea "ham"?**
+
+```{r}
+# Palabras a analizar
+words_to_check <- c("prize", "å£", "claim", "urgent", "call")
+
+# Cargas del PCA en el eje discriminante
+loadings <- pca_res$rotation[, best_PC]
+
+# Identificar si cada palabra está relacionada con Spam o Ham
+result <- sapply(words_to_check, function(w){
+  if (loadings[w] > 0) {
+    "Sí (asociada a Spam)"
+  } else {
+    "Sí (asociada a Ham)"
+  }
+})
+
+# Mostrar resultados
+result
+
+```
+
+
+# Ejercicio 3
+
+Los datos de este ejercicio contiene información de los partidos de la liga 2018-2019.
+
+**cargar los datos**
+
+```{r}
+dataF <- read.csv('./data/season-1819_csv.csv', 
+                  header = T, sep = ',', stringsAsFactors = F,
+                  check.names = F)
+```
+
+
+### 3.1
+
+**Se pide evaluar para cada equipo si el hecho de jugar de local aumenta las posibilidades de ganar. Dar una lista, con una tasa de falsos positivos del 10%, de equipos en los que jugar de local influye en el hecho de ganar**
+
+```{r}
+# Lista de equipos
+teams <- unique(c(dataF$HomeTeam, dataF$AwayTeam))
+
+# Inicializamos vector para almacenar equipos donde jugar en casa influye
+home_advantage <- c()
+
+# Nivel de significancia para tasa de falsos positivos del 10%
+alpha <- 0.10
+
+for(team in teams){
+  # Partidos de local y visitante
+  home_games <- dataF[dataF$HomeTeam == team, ]
+  away_games <- dataF[dataF$AwayTeam == team, ]
+  
+  # Número de victorias de local y total de partidos de local
+  wins_home <- sum(home_games$FTR == "H")  # victoria de local
+  n_home <- nrow(home_games)
+  
+  # Número de victorias como visitante y total de partidos fuera
+  wins_away <- sum(away_games$FTR == "A")  # victoria como visitante
+  n_away <- nrow(away_games)
+  
+  # Proporción de victorias
+  prop_home <- wins_home / n_home
+  prop_away <- wins_away / n_away
+  
+  # Test de proporciones (dos proporciones independientes)
+  test <- prop.test(x = c(wins_home, wins_away), n = c(n_home, n_away), alternative = "greater")
+  
+  # Si p-valor < alpha, jugar de local aumenta la probabilidad de ganar
+  if(!is.na(test$p.value) & test$p.value < alpha){
+    home_advantage <- c(home_advantage, team)
+  }
+}
+
+# Mostrar resultados
+home_advantage
+```
+
+### 3.2
+
+**Se pide generar una gráfica en la que se muestre para cada equipo la proporción de victorias como local y como visitante.**
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Crear dataframe con proporciones por equipo
+team_stats <- data.frame(
+  Team = character(),
+  Location = character(),
+  WinProp = numeric(),
+  stringsAsFactors = FALSE
+)
+
+teams <- unique(c(dataF$HomeTeam, dataF$AwayTeam))
+
+for(team in teams){
+  home_games <- dataF[dataF$HomeTeam == team, ]
+  away_games <- dataF[dataF$AwayTeam == team, ]
+  
+  prop_home <- if(nrow(home_games) > 0) sum(home_games$FTR == "H") / nrow(home_games) else NA
+  prop_away <- if(nrow(away_games) > 0) sum(away_games$FTR == "A") / nrow(away_games) else NA
+  
+  team_stats <- rbind(team_stats,
+                      data.frame(Team = team, Location = "Local", WinProp = prop_home),
+                      data.frame(Team = team, Location = "Visitante", WinProp = prop_away))
+}
+
+# Reordenar los equipos según proporción de victorias locales
+team_stats$Team <- factor(team_stats$Team, levels = teams[order(sapply(teams, function(t) sum(dataF$FTR[dataF$HomeTeam==t]=="H")/sum(dataF$HomeTeam==t)), decreasing = TRUE)])
+
+# Graficar
+ggplot(team_stats, aes(x = Team, y = WinProp, fill = Location)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Proporción de victorias como local y visitante por equipo (Liga 18/19)",
+       x = "Equipo",
+       y = "Proporción de victorias") +
+  scale_fill_manual(values = c("Local" = "#1f77b4", "Visitante" = "#ff7f0e")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+**Realizar también la gráfica mostrando el número total de victorias, distinguiendo entre las victorias como local y como visitante**
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Crear dataframe con número de victorias por equipo
+team_wins <- data.frame(
+  Team = character(),
+  Location = character(),
+  Wins = numeric(),
+  stringsAsFactors = FALSE
+)
+
+teams <- unique(c(dataF$HomeTeam, dataF$AwayTeam))
+
+for(team in teams){
+  home_games <- dataF[dataF$HomeTeam == team, ]
+  away_games <- dataF[dataF$AwayTeam == team, ]
+  
+  wins_home <- sum(home_games$FTR == "H")
+  wins_away <- sum(away_games$FTR == "A")
+  
+  team_wins <- rbind(team_wins,
+                      data.frame(Team = team, Location = "Local", Wins = wins_home),
+                      data.frame(Team = team, Location = "Visitante", Wins = wins_away))
+}
+
+# Reordenar los equipos según victorias totales
+team_totals <- team_wins %>%
+  group_by(Team) %>%
+  summarise(TotalWins = sum(Wins)) %>%
+  arrange(desc(TotalWins))
+
+team_wins$Team <- factor(team_wins$Team, levels = team_totals$Team)
+
+# Graficar
+ggplot(team_wins, aes(x = Team, y = Wins, fill = Location)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Número de victorias como local y visitante por equipo (Liga 18/19)",
+       x = "Equipo",
+       y = "Número de victorias") +
+  scale_fill_manual(values = c("Local" = "#1f77b4", "Visitante" = "#ff7f0e")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+### 3.3
+
+**Las siguiente variables muestran caracteristicas sobre el rendimiento del equipo que jugó como visitante**
+
+```{r}
+cols1 <- c('AS', 'AST','AC', 'AF', 'FTAG', 'HTAG', 'AY')
+```
+
+**Se pide generar una tabla que contenga para cada equipo esta información, sumando el rendimiento en cada partido**
+
+```{r}
+library(dplyr)
+
+# Columnas de interés sobre rendimiento del visitante
+cols1 <- c('AS', 'AST','AC', 'AF', 'FTAG', 'HTAG', 'AY')
+
+# Agrupar por equipo visitante y sumar las estadísticas
+visitor_stats <- dataF %>%
+  group_by(AwayTeam) %>%
+  summarise(across(all_of(cols1), sum, na.rm = TRUE)) %>%
+  arrange(AwayTeam)
+
+# Mostrar resultado
+visitor_stats
+```
+
+**Realizar una gráfica en 2D que maximice est información**
+
+```{r}
+library(ggplot2)
+library(ggrepel)
+library(dplyr)
+
+# visitor_stats ya existe con columnas: AwayTeam, AS, AST, AC, AF, FTAG, HTAG, AY
+
+# Guardamos los nombres de los equipos
+teams <- visitor_stats$AwayTeam
+
+# Seleccionamos solo las columnas numéricas
+visitor_matrix <- visitor_stats %>%
+  select(all_of(cols1)) %>%
+  as.matrix()
+
+# Aplicamos PCA
+pca_vis <- prcomp(visitor_matrix, center = TRUE, scale. = TRUE)
+
+# Creamos dataframe con PC1, PC2 y los equipos
+pca_df <- data.frame(
+  PC1 = pca_vis$x[,1],
+  PC2 = pca_vis$x[,2],
+  Team = teams
+)
+
+# Gráfica de puntos simples con etiquetas
+ggplot(pca_df, aes(x = PC1, y = PC2, label = Team)) +
+  geom_point(size = 3, color = "#1f77b4") +
+  geom_text_repel(size = 3) +
+  labs(title = "PCA del rendimiento visitante por equipo (puntos simples)",
+       x = "Componente Principal 1",
+       y = "Componente Principal 2") +
+  theme_minimal()
+```
+
+
+# Ejercicio 4
+
+Este ejercicio corresponde al examen del curso 23/24. Se han modificado un poco las preguntas para que no sea "tan fácil".
+
+### 4.1
+**cargar los datos Residuos.csv.** <br>
+**Eliminar la segunda columna "Total Nacional"** <br>
+**Eliminar filas que contengan "missing values"** <br>
+**Cambiar el nombre del data.frame a 'Tipo', 'Comunidad', 'Año', 'Total'** <br>
+**1 punto** <br>
+
+```{r}
+# Cargar los datos
+# Ajusta el separador según tu CSV; aquí asumimos tabulador (\t)
+residuos <- read.csv('./data/Residuos.csv', 
+                     header = TRUE, sep = "\t", stringsAsFactors = FALSE)
+
+# Eliminar la segunda columna "Total Nacional"
+# Esto no borra la columna de comunidades
+residuos <- residuos[, -2]
+
+# Eliminar filas que contengan missing values (NA)
+residuos <- na.omit(residuos)
+
+# Cambiar los nombres de columnas a: Tipo, Comunidad, Año, Total
+colnames(residuos) <- c('Tipo', 'Comunidad', 'Año', 'Total')
+
+# Revisar resultado
+head(residuos,20)
+
+```
+
+
+### 4.2
+
+**Convierte la variable 'Total' en numérica, teniendo en cuenta que es necesario eliminar los "."**<br>
+**Elimina el código numérico en las columnas 'Tipo' y 'Comunidad'**<br>
+
+```{r}
+library(dplyr)
+library(stringr)
+
+# Convertir 'Total' en numérico, eliminando los puntos
+residuos$Total <- as.numeric(gsub("\\.", "", residuos$Total))
+
+# Eliminar código numérico de 'Tipo' (ej. "10.1.1 " al inicio)
+residuos$Tipo <- str_trim(gsub("^\\d+\\.\\d+\\.\\d+\\s+", "", residuos$Tipo))
+
+# Eliminar código numérico de 'Comunidad' (ej. "01 " al inicio)
+residuos$Comunidad <- str_trim(gsub("^\\d+\\s*", "", residuos$Comunidad))
+
+# Revisar resultado
+head(residuos)
+```
+
+
+**Finalmente, ejecuta el siguiente código para tener los nombres de las comunidades más cómodos de leer**<br>
+**2 puntos**<br>
+
+
+```{r}
+residuos <- residuos %>%
+  filter(Comunidad != "" & !is.na(Comunidad))
+
+# Limpiar nombres de comunidades
+residuos$Comunidad <- str_trim(residuos$Comunidad)
+residuos$Comunidad <- str_squish(residuos$Comunidad)
+residuos$Comunidad <- str_to_title(residuos$Comunidad)
+
+library(stringr)
+library(dplyr)
+
+# Formatear nombres de comunidades
+residuos <- residuos %>%
+  mutate(
+    Comunidad = str_squish(Comunidad),        # Elimina espacios extra
+    Comunidad = str_to_title(Comunidad)      # Mayúscula inicial en cada palabra
+  )
+
+# Revisar resultado
+head(residuos$Comunidad)
+
+```
+
+
+### 4.3
+
+
+
+  **Resumir datos anteriores por año y comunidad, obteniendo para cada comunidad la cantidad total de residuos**<br>
+  **Leer el archivo 'Poblacion.csv'**<br>
+  **Normalizar la cantidad de residuos por la población de la comunidad. Unidades: Toneladas/persona.**<br><br>
+  **Realizar un gráfico para las siguientes comunidades:**<br>
+  ```{r}
+  idx <- iso <- c('Madrid', 'Murcia', 'País Vasco', 'Islas Baleares', 'Cataluña', 'Navarra')
+  ```
+  **En el que se muestre los los residuos normalizados por comunidad y año**<br>
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(stringr)
+
+# Resumir residuos por año y comunidad
+residuos_agg <- residuos %>%
+  group_by(Año, Comunidad) %>%
+  summarise(TotalResiduos = sum(Total, na.rm = TRUE)) %>%
+  ungroup()
+
+# Leer el archivo de población
+poblacion <- read.csv('./data/Poblacion.csv', header = TRUE, sep = "\t", stringsAsFactors = FALSE)
+
+# Limpiar nombres de comunidades para que coincidan
+poblacion$Comunidad <- str_squish(poblacion$Comunidad)
+poblacion$Comunidad <- str_to_title(poblacion$Comunidad)
+
+# Normalizar residuos por población (Toneladas/persona)
+residuos_norm <- residuos_agg %>%
+  left_join(poblacion, by = c("Comunidad", "Año")) %>%
+  mutate(Residuos_por_persona = TotalResiduos / Poblacion) # suponiendo que columna población se llama 'Poblacion'
+
+# Filtrar las comunidades deseadas
+idx <- c('Madrid', 'Murcia', 'País Vasco', 'Islas Baleares', 'Cataluña', 'Navarra')
+
+residuos_plot <- residuos_norm %>%
+  filter(Comunidad %in% idx)
+
+# Graficar residuos normalizados por año y comunidad
+ggplot(residuos_plot, aes(x = Año, y = Residuos_por_persona, color = Comunidad, group = Comunidad)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  labs(title = "Residuos normalizados por población por comunidad y año",
+       x = "Año",
+       y = "Toneladas por persona") +
+  theme_minimal() +
+  scale_color_brewer(palette = "Set2")
+
+```
+
+
+### 4.4
+
+**Evaluar la tendencia lineal de los residuos a lo largo del tiempo para cada comunidad utilizando la prueba de correlación (calcular el p.value para cada comunidad)**<br>
+**Identificar qué comunidades muestran una disminución significativa en los residuos a lo largo del tiempo (FDR <= 0.05)**<br>
+**2 puntos**
+
+
+```{r}
+
+
+
+
+```
+
+
+### 4.5
+
+En el apartado anterior estamos utilizando n=12 para la prueba de correlación.
+¿Es eso suficiente para capturar una correlación negativa de 0.5, asumiendo alpha=0.05 y power=0.8.
+
+```{r}
+
+
+
+```
+

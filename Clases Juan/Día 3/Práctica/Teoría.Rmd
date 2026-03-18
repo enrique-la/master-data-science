@@ -1,0 +1,610 @@
+---
+title: "CHULETA DECISIÓN - Data Science y Diseño Experimental"
+subtitle: "¿Qué Test/Método Usar y Cuándo?"
+author: "Guía Rápida para Examen"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: cosmo
+geometry: margin=2cm
+fontsize: 10pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE, warning = FALSE, message = FALSE)
+```
+
+\newpage
+
+# ANÁLISIS EXPLORATORIO INICIAL
+
+## ¿Qué tipo de datos tengo?
+
+### VARIABLES CONTINUAS
+Números con decimales: peso, altura, precio
+
+**Ejemplo pregunta**: *"Analiza la distribución del peso de los pacientes"*
+
+- → Descriptivos: media, mediana, sd, histogramas, boxplots
+- → Verificar: normalidad (Shapiro-Wilk), outliers
+
+### VARIABLES CATEGÓRICAS
+Grupos: género, ciudad, sí/no
+
+**Ejemplo pregunta**: *"¿Cuántos pacientes hay por género?"*
+
+- → Descriptivos: tablas de frecuencia, barplots
+- → Verificar: distribución de categorías
+
+### VARIABLES DE CONTEO
+Enteros ≥ 0: número de visitas, eventos
+
+**Ejemplo pregunta**: *"Describe el número de visitas hospitalarias"*
+
+- → Descriptivos: media, rango, histogramas
+
+\newpage
+
+# TESTS DE HIPÓTESIS - ÁRBOL DE DECISIÓN
+
+## VARIABLES CONTINUAS (medias/localizaciones)
+
+### 1 GRUPO (comparar con valor de referencia)
+
+**Ejemplo pregunta**: *"¿La altura media de los estudiantes es diferente de 170cm?"*
+
+- ✅ **One-sample t-test** si: datos normales, sin outliers
+- ✅ **Wilcoxon signed-rank** si: outliers o no normalidad
+
+```{r}
+# Si normal:
+t.test(alturas, mu = 170)
+
+# Si no normal:
+wilcox.test(alturas, mu = 170)
+```
+
+### 2 GRUPOS - RELACIONADAS
+
+**Ejemplo pregunta**: *"¿El peso de los pacientes cambió después del tratamiento?"*
+
+**Ejemplo pregunta**: *"¿Hay diferencia en la presión arterial antes y después del ejercicio?"*
+
+- ✅ **Paired t-test** si: diferencias normales
+- ✅ **Wilcoxon signed-rank** si: outliers o no normalidad
+
+```{r}
+# Si normal:
+t.test(peso_antes, peso_despues, paired = TRUE)
+
+# Si no normal:
+wilcox.test(peso_antes, peso_despues, paired = TRUE)
+```
+
+### 2 GRUPOS - INDEPENDIENTES
+
+**Ejemplo pregunta**: *"¿Los hombres pesan más que las mujeres?"*
+
+**Ejemplo pregunta**: *"¿Hay diferencia en el salario entre fumadores y no fumadores?"*
+
+**¿Datos normales y sin outliers?**
+
+- **SÍ** → Two-sample t-test
+- **NO** → Wilcoxon-Mann-Whitney
+
+```{r}
+# Verificar normalidad primero:
+shapiro.test(grupo1)
+shapiro.test(grupo2)
+
+# Verificar varianzas:
+var.test(grupo1, grupo2)
+
+# Si varianzas iguales:
+t.test(grupo1, grupo2, var.equal = TRUE)
+
+# Si varianzas diferentes:
+t.test(grupo1, grupo2, var.equal = FALSE)
+
+# Si no normal:
+wilcox.test(grupo1, grupo2)
+```
+
+### 3+ GRUPOS independientes
+
+**Ejemplo pregunta**: *"¿El peso varía entre personas de Asia, Europa y América?"*
+
+**Ejemplo pregunta**: *"Compara el rendimiento académico entre 4 escuelas diferentes"*
+
+**¿Datos normales, varianzas homogéneas, sin outliers?**
+
+- **SÍ** → ✅ ANOVA
+- **NO** → ✅ Kruskal-Wallis
+
+```{r}
+# Verificar:
+shapiro.test(datos) # para cada grupo
+bartlett.test(variable ~ grupo)
+
+# ANOVA:
+modelo <- aov(variable ~ grupo)
+summary(modelo)
+
+# Si no paramétrico:
+kruskal.test(variable ~ grupo)
+```
+
+⚠️ **IMPORTANTE**: ANOVA/Kruskal-Wallis dicen "hay diferencias" pero NO cuál grupo
+
+\newpage
+
+## VARIANZAS/DISPERSIONES
+
+### 2 GRUPOS
+
+**Ejemplo pregunta**: *"¿La variabilidad del peso es la misma en hombres y mujeres?"*
+
+```{r}
+var.test(grupo1, grupo2)
+```
+
+### 3+ GRUPOS
+
+**Ejemplo pregunta**: *"¿La dispersión de las notas es homogénea entre las 5 clases?"*
+
+```{r}
+bartlett.test(notas ~ clase)
+```
+
+## VARIABLES CATEGÓRICAS (asociación/independencia)
+
+### TABLA 2×2
+
+**Ejemplo pregunta**: *"¿Ser catalán está asociado con ser del Barça?"*
+
+**Ejemplo pregunta**: *"¿Hay asociación entre fumar y tener cáncer de pulmón?"*
+
+**Ejemplo pregunta**: *"¿Jugar en casa afecta a las victorias del Real Sociedad?"*
+
+**¿Muestra pequeña (frecuencias esperadas < 5)?**
+
+- **SÍ** → ✅ Test de Fisher (exacto)
+- **NO** → ✅ Test de Chi-cuadrado
+
+```{r}
+# Fisher (muestras pequeñas):
+fisher.test(tabla, alternative = "greater")
+
+# Chi-cuadrado (muestras grandes):
+chisq.test(tabla)
+```
+
+### TABLA mayor que 2×2
+
+**Ejemplo pregunta**: *"¿Hay asociación entre estado y población?"*
+
+```{r}
+chisq.test(tabla)
+```
+
+### PROPORCIÓN BINARIA
+
+**Ejemplo pregunta**: *"Paul el pulpo acertó 8 de 8 partidos. ¿Es suerte?"*
+
+**Ejemplo pregunta**: *"Una moneda salió cara 8 de 10 veces. ¿Está trucada?"*
+
+```{r}
+binom.test(8, 10, p = 0.5, alternative = "greater")
+binom.test(8, 8, p = 0.5, alternative = "greater")
+```
+
+## CUANDO NO SÉ LA DISTRIBUCIÓN / DUDAS
+
+### Permutation Test
+
+**Ejemplo pregunta**: *"Compara dos grupos con outliers y dudas sobre test"*
+
+```{r}
+# Creas tu propia distribución nula permutando etiquetas
+diferencia_observada <- mean(grupo_B) - mean(grupo_A)
+datos_combinados <- c(grupo_A, grupo_B)
+
+diferencias_simuladas <- numeric(10000)
+for (i in 1:10000) {
+  datos_permutados <- sample(datos_combinados)
+  grupo_A_sim <- datos_permutados[1:length(grupo_A)]
+  grupo_B_sim <- datos_permutados[(length(grupo_A)+1):length(datos_combinados)]
+  diferencias_simuladas[i] <- mean(grupo_B_sim) - mean(grupo_A_sim)
+}
+
+p_value <- sum(abs(diferencias_simuladas) >= abs(diferencia_observada)) / 10000
+```
+
+### Bootstrap
+
+**Ejemplo pregunta**: *"¿Cuál es el intervalo de confianza de la mediana?"*
+
+```{r}
+# Remuestreo con reemplazo para estimar distribución
+medianas_bootstrap <- numeric(10000)
+for(i in 1:10000){
+  medianas_bootstrap[i] <- median(sample(x, size=length(x), replace=TRUE))
+}
+quantile(medianas_bootstrap, c(0.025, 0.975))
+```
+
+\newpage
+
+# VERIFICACIÓN DE SUPUESTOS
+
+## ¿Mis datos son normales?
+
+**Ejemplo pregunta**: *"Antes de hacer un t-test, verifica normalidad"*
+
+```{r}
+shapiro.test(datos)
+# H₀: datos son normales
+# Si p < 0.05 → NO normales → USA TEST NO PARAMÉTRICO
+```
+
+## ¿Hay outliers extremos?
+
+**Ejemplo pregunta**: *"Identifica valores atípicos en el dataset"*
+
+```{r}
+boxplot(datos)
+# Si hay muchos outliers → USA TEST NO PARAMÉTRICO
+```
+
+## ¿Varianzas homogéneas?
+
+**Ejemplo pregunta**: *"Verifica si puedes usar var.equal=TRUE"*
+
+```{r}
+# 2 grupos:
+var.test(grupo1, grupo2)
+
+# 3+ grupos:
+bartlett.test(variable ~ grupo)
+
+# Si p < 0.05 → varianzas diferentes
+# En t-test: usa var.equal = FALSE
+```
+
+\newpage
+
+# REGRESIÓN - ÁRBOL DE DECISIÓN
+
+## Y es CONTINUA (peso, precio, temperatura)
+
+### 1 PREDICTOR
+
+**Ejemplo pregunta**: *"¿Cómo afecta el peso del coche al consumo (mpg)?"*
+
+**Ejemplo pregunta**: *"¿El BMI predice los gastos médicos?"*
+
+```{r}
+modelo <- lm(mpg ~ weight, data = datos)
+summary(modelo)
+```
+
+### MÚLTIPLES PREDICTORES
+
+**Ejemplo pregunta**: *"¿Cómo afectan edad, BMI y fumar a los gastos médicos?"*
+
+**Ejemplo pregunta**: *"Predice el precio de venta de una casa usando múltiples características"*
+
+```{r}
+modelo <- lm(charges ~ age + bmi + smoker, data = insurance)
+summary(modelo)
+```
+
+### VERIFICAR SUPUESTOS
+
+```{r}
+# 1. Linealidad
+plot(datos$Y ~ datos$X)
+
+# 2. Normalidad residuos
+shapiro.test(residuals(modelo))
+
+# 3. Homocedasticidad
+plot(modelo, which = 1)
+
+# 4. Outliers influyentes
+plot(modelo, which = 5)
+```
+
+### SI NO SE CUMPLEN SUPUESTOS
+
+```{r}
+# Transformación:
+modelo <- lm(log(Y) ~ X, data = datos)
+modelo <- lm(sqrt(Y) ~ X, data = datos)
+```
+
+## Y es BINARIA (0/1, sí/no, enfermo/sano)
+
+**Ejemplo pregunta**: *"¿El BMI predice si un paciente tendrá un evento cardíaco?"*
+
+**Ejemplo pregunta**: *"¿La edad predice si alguien aprueba el examen?"*
+
+```{r}
+modelo <- glm(evento_cardiaco ~ BMI, 
+              family = binomial(link = "logit"),
+              data = datos)
+summary(modelo)
+```
+
+**Distribución**: Binomial  
+**Link**: logit  
+**Y debe estar entre 0 y 1** (probabilidad)
+
+## Y es CONTEO (número entero ≥ 0)
+
+**Ejemplo pregunta**: *"¿El BMI predice el número de visitas hospitalarias?"*
+
+**Ejemplo pregunta**: *"Modela el número de accidentes según variables de tráfico"*
+
+```{r}
+modelo <- glm(num_visitas ~ BMI, 
+              family = poisson(link = "log"),
+              data = datos)
+summary(modelo)
+```
+
+**Distribución**: Poisson  
+**Link**: log  
+**Y debe ser ≥ 0** (conteos)
+
+## Y CONTINUA con PROBLEMAS
+
+**Ejemplo pregunta**: *"BMI vs gastos médicos tiene relación no lineal"*
+
+### Opción 1: Transformar Y
+
+```{r}
+modelo <- lm(log(charges) ~ BMI, data = datos)
+modelo <- lm(sqrt(charges) ~ BMI, data = datos)
+```
+
+### Opción 2: GLM con Gamma
+
+```{r}
+modelo <- glm(charges ~ BMI, 
+              family = Gamma(link = "log"),
+              data = datos)
+```
+
+\newpage
+
+# SCREENING DE VARIABLES
+
+## ¿Tengo 10+ variables predictoras?
+
+**Ejemplo pregunta**: *"Dataset con 80 predictores, identifica los significativos"*
+
+**PROBLEMA**: Muchos tests → ~5% falsos positivos esperados
+
+### Corrección FDR (Benjamini-Hochberg)
+
+✅ **USA ESTO en análisis exploratorios**
+
+```{r}
+# Hacer muchas regresiones y guardar p-values
+p_values <- numeric(length(predictores))
+for(i in 1:length(predictores)) {
+  modelo <- lm(Y ~ datos[,predictores[i]])
+  p_values[i] <- summary(modelo)$coefficients[2,4]
+}
+
+# Corrección FDR
+p_adjusted <- p.adjust(p_values, method = "BH")
+
+# Ver cuáles siguen siendo significativos
+significant <- which(p_adjusted < 0.05)
+```
+
+### Corrección Bonferroni
+
+Solo si DEBES evitar TODO falso positivo
+
+```{r}
+p_adjusted <- p.adjust(p_values, method = "bonferroni")
+```
+
+\newpage
+
+# REDUCCIÓN DE DIMENSIONALIDAD
+
+## VISUALIZACIÓN
+
+**Ejemplo pregunta**: *"Tienes datos de 60 sensores, visualiza patrones"*
+
+**Ejemplo pregunta**: *"Visualiza jugadores de fútbol según 30+ atributos"*
+
+```{r}
+# PCA
+pca_result <- prcomp(datos, center = TRUE, scale. = TRUE)
+
+# Ver varianza explicada
+summary(pca_result)
+
+# Visualizar
+plot(pca_result$x[,1], pca_result$x[,2], 
+     col = grupos, pch = 19,
+     xlab = "PC1", ylab = "PC2")
+legend("topright", legend = levels(grupos), 
+       col = 1:length(levels(grupos)), pch = 19)
+
+# Con ggplot
+library(ggplot2)
+data_pca <- data.frame(PC1 = pca_result$x[,1],
+                       PC2 = pca_result$x[,2],
+                       grupo = grupos)
+ggplot(data_pca, aes(PC1, PC2, color = grupo)) +
+  geom_point() +
+  theme_minimal()
+```
+
+### ¿Cuántos componentes usar?
+
+```{r}
+# Scree plot
+plot(pca_result, type = "l")
+
+# Varianza explicada acumulada
+cumsum(pca_result$sdev^2 / sum(pca_result$sdev^2))
+# Típicamente: 80-90% de varianza
+```
+
+## ELIMINAR MULTICOLINEALIDAD
+
+**Ejemplo pregunta**: *"20 predictores correlacionados antes de regresión"*
+
+```{r}
+pca_result <- prcomp(predictores, center = TRUE, scale. = TRUE)
+# Usa los primeros n componentes
+datos_pca <- pca_result$x[, 1:5]
+modelo <- lm(Y ~ datos_pca)
+```
+
+\newpage
+
+# DISEÑO EXPERIMENTAL
+
+## ¿Cuántas muestras necesito?
+
+**Ejemplo pregunta**: *"¿Cuántos pacientes necesitas para comparar dos tratamientos?"*
+
+```{r}
+library(pwr)
+
+# Para t-test
+pwr.t.test(d = 0.5,           # effect size
+           sig.level = 0.05,   # alfa
+           power = 0.8,        # poder deseado
+           type = "two.sample")
+
+# Para ANOVA
+pwr.anova.test(k = 3,          # número de grupos
+               f = 0.25,       # effect size
+               sig.level = 0.05,
+               power = 0.8)
+```
+
+## ¿Tengo una fuente conocida de variabilidad?
+
+**Ejemplo pregunta**: *"Comparas 3 dietas pero el género afecta al peso"*
+
+**Ejemplo pregunta**: *"Experimento con zapatos: cada persona prueba ambos materiales"*
+
+```{r}
+# Diseño de bloques
+modelo <- aov(peso ~ dieta + genero, data = datos)
+summary(modelo)
+
+# SIN bloques (PEOR):
+modelo_malo <- aov(peso ~ dieta, data = datos)
+summary(modelo_malo)
+```
+
+## ¿Quiero explorar muchos factores eficientemente?
+
+**Ejemplo pregunta**: *"Tienes 7 factores, saber cuáles son importantes"*
+
+```{r}
+library(FrF2)
+
+# 7 factores, solo 8 experimentos (2^(7-4))
+design <- FrF2(nruns = 8, nfactors = 7, randomize = FALSE)
+
+# Añadir respuesta
+design <- add.response(design, respuesta)
+
+# Analizar
+modelo <- lm(design, degree = 1)
+summary(modelo)
+```
+
+\newpage
+
+# TABLA RESUMEN RÁPIDA
+
+| Pregunta del Examen | Test/Método |
+|---------------------|-------------|
+| ¿Los hombres pesan más que las mujeres? | **t-test** |
+| Hay outliers extremos + comparar grupos | **Wilcoxon** |
+| Compara el peso entre 4 países | **ANOVA** |
+| Compara 3 estados con outliers | **Kruskal-Wallis** |
+| ¿La variabilidad es igual en ambos grupos? | **F-test** |
+| ¿Ser del Barça está asociado con ser catalán? | **Fisher/Chi²** |
+| ¿Jugar en casa afecta a victorias? (2×2) | **Fisher/Chi²** |
+| ¿El peso del coche afecta al consumo? | **lm()** |
+| ¿Edad, BMI y fumar predicen gastos? | **lm()** múltiple |
+| ¿BMI predice eventos cardíacos (sí/no)? | **glm(binomial)** |
+| ¿BMI predice número de visitas (0,1,2,...)? | **glm(poisson)** |
+| Visualiza 60 sensores en 2D | **PCA** |
+| Muchas variables, cuáles son significativas | **FDR** |
+| ¿Los datos son normales? | **Shapiro-Wilk** |
+| Comparar 3 dietas controlando por género | **Blocking** |
+| ¿Cuántos pacientes necesito? | **pwr.t.test()** |
+
+# CHECKLIST RÁPIDO
+
+**PASO 1: ¿Qué me están preguntando?**
+
+- [ ] Comparar grupos → Tests de hipótesis
+- [ ] Modelar relación → Regresión
+- [ ] Visualizar → PCA
+- [ ] Diseñar experimento → Power analysis
+
+**PASO 2: Si es COMPARAR:**
+
+- [ ] ¿Qué tipo? Continua/Categórica/Conteo
+- [ ] ¿Cuántos grupos? 1/2/3+
+- [ ] ¿Normal? → Shapiro
+- [ ] ¿Outliers? → Boxplot
+- [ ] ¿Independientes o relacionados?
+
+**PASO 3: Si es MODELAR:**
+
+- [ ] ¿Y es continua/binaria/conteo?
+- [ ] ¿Cuántos X?
+- [ ] Verificar supuestos después
+
+**PASO 4: Si son MUCHAS variables:**
+
+- [ ] Aplicar corrección FDR
+
+**PASO 5: Si es VISUALIZAR:**
+
+- [ ] PCA y colorear por grupos
+
+# ERRORES COMUNES A EVITAR
+
+❌ Comparar dos grupos con outliers usando t-test  
+→ ✅ Usa Wilcoxon
+
+❌ Usar ANOVA sin verificar normalidad  
+→ ✅ Primero Shapiro-Wilk, si no normal usa Kruskal-Wallis
+
+❌ Modelar probabilidad de enfermedad con lm()  
+→ ✅ Usa glm(family=binomial)
+
+❌ Probar 100 variables sin corrección múltiple  
+→ ✅ Aplica p.adjust(method="BH")
+
+❌ Usar Chi² con frecuencias de 3  
+→ ✅ Usa Fisher para muestras pequeñas
+
+❌ Hacer regresión sin graficar datos primero  
+→ ✅ Siempre plot(Y ~ X) primero
+
+❌ PCA sin normalizar variables de diferentes escalas  
+→ ✅ Usa scale=TRUE en prcomp()
+
+❌ Comparar dietas ignorando que género afecta  
+→ ✅ Usa diseño de bloques

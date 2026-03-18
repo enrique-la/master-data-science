@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pandoc:*)",
+      "Bash(python convertir_a_pdf.py:*)",
+      "Bash(pip install:*)",
+      "Bash(python md_to_pdf.py:*)",
+      "Bash(python convertir_md_pdf.py:*)",
+      "Bash(dir:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

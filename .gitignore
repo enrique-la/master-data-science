@@ -1,0 +1,47 @@
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+
+# Datos sensibles / credenciales
+.env
+*.env
+secrets.*
+credentials.*
+
+# Archivos grandes
+*.h5
+*.pt
+*.pth
+*.bin
+*.pkl
+*.onnx
+*.gz
+*.zip
+*.tar
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+.idea/

@@ -1,0 +1,1262 @@
+---
+title: "Análisis de mercado de jugadores — 5 grandes ligas (2024/2025)"
+author: "Enrique Lahuerta y David Alcolea"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+  toc: true
+  toc_depth: 3
+  theme: flatly
+  highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 8, fig.height = 5)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(viridis)
+library(ggrepel)
+library(ggpubr)
+library(FactoMineR)
+library(factoextra)
+library(reshape2)
+library(cowplot)
+# Para tablas y tests
+library(stats)
+library(car)
+library(nnet)
+```
+
+# Introducción
+
+Este R Markdown está diseñado para ejecutar **todo el flujo** que propusiste:
+
+1. **Parte I — Exploración y pruebas estadísticas** (visualización, t-test, ANOVA, Fisher, correlaciones, insights no obvios).
+2. **Parte II — Sistema de rating por posición + detección de chollos** (PCA por posición para obtener pesos, normalización, rating 0-100, LM/GLM para chollos, análisis por club).
+
+> Nota: Asume que tienes ya cargados los 3 CSVs en la misma carpeta `./data/` y que las columnas se llaman como en tu dataset original (`players_data-2024_2025.csv`, `players.csv`, `player_valuations.csv`). El script usa las tablas `estadisticas` y `valor_jugador_unique` tal como las definiste.
+
+---
+
+# Preparación de datos
+
+```{r datos-prep}
+# Cargar datos (ajusta rutas si hace falta)
+estadisticas <- read.csv("./data/players_data-2024_2025.csv", stringsAsFactors = FALSE)
+jugadores <- read.csv("./data/players.csv", stringsAsFactors = FALSE)
+valor <- read.csv("./data/player_valuations.csv", stringsAsFactors = FALSE)
+
+# Normalizar fecha y unir el último valor por player_id (ya hecho por ti, repetimos por reproducibilidad)
+valor$date <- as.numeric(sapply(strsplit(valor$date, "-"), `[`, 1))
+valor_jugador <- merge(valor, jugadores, by = "player_id", all.x = TRUE)
+valor_jugador <- valor_jugador %>%
+  group_by(player_id) %>%
+  arrange(desc(date), .by_group = TRUE) %>%
+  slice_head(n = 1) %>%
+  ungroup()
+
+# Tomar la última fila por Player en estadisticas (ya lo hacías antes)
+estadisticas <- estadisticas %>%
+  group_by(Player) %>%
+  arrange(desc(Rk), .by_group = TRUE) %>%
+  slice_head(n = 1) %>%
+  ungroup()
+
+# Normalizar nombres para hacer el join (ya lo hiciste, lo reproducimos)
+estadisticas <- estadisticas %>%
+  mutate(name = tolower(iconv(Player, from = "UTF-8", to = "ASCII//TRANSLIT")))
+
+valor_jugador_unique <- valor_jugador %>%
+  mutate(name_clean = tolower(iconv(name, from = "UTF-8", to = "ASCII//TRANSLIT"))) %>%
+  group_by(name_clean) %>%
+  slice_max(market_value_in_eur.x, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(name_clean, market_value_in_eur.x)
+
+estadisticas <- estadisticas %>%
+  left_join(valor_jugador_unique, by = c("name" = "name_clean")) %>%
+  rename(market_value = market_value_in_eur.x)
+
+estadisticas <- estadisticas %>%
+  mutate(Pos = trimws(sapply(strsplit(Pos, ","), `[`, 1))) %>%
+  filter(!is.na(market_value) & market_value > 0) %>%
+  arrange(desc(market_value))
+
+# Mostrar resumen rápido
+cat("Número total de futbolistas:", nrow(estadisticas), "\n")
+cat("Posiciones principales: ", paste(unique(estadisticas$Pos), collapse=", "), "\n")
+```
+
+---
+
+# Parte I — Exploración, visualización y tests
+
+> **Objetivo:** entender la estructura de los datos y responder preguntas no triviales que ayuden a construir el posterior rating y detección de chollos.
+
+## 1. Descripción general y visualizaciones rápidas
+
+```{r distribuciones}
+# Variables ejemplo a inspeccionar
+vars_ex <- c("Gls","Ast","KP","Carries","Recov","Tkl","Int","xG","xA","market_value")
+# Histogramas rápidos (si existen)
+for(v in vars_ex){
+  if(v %in% names(estadisticas)){
+    p <- ggplot(estadisticas, aes_string(x=v)) +
+      geom_histogram(bins=40, fill="#2c7fb8", color="white") +
+      theme_minimal() +
+      labs(title=paste("Distribución de", v))
+    print(p)
+  }
+}
+
+# Boxplot de market_value por Pos_main
+if("market_value" %in% names(estadisticas)){
+  ggplot(estadisticas %>% filter(!is.na(market_value)),
+         aes(x=Comp, y=market_value, fill=Comp)) +
+    geom_boxplot() +
+    theme_minimal() +
+    scale_y_continuous(labels = scales::dollar_format()) +
+    labs(title = "Market value por liga")
+}
+```
+
+## 2. Preguntas estadísticas exploratorias (t-test, ANOVA, Fisher, chi2, correlación)
+
+A continuación están las preguntas que proponemos (no obvias) y el código para ejecutarlas. Cada bloque incluye un gráfico representativo.
+
+### Pregunta 1 — t-test (KP: MF vs FW)
+
+**Pregunta:** ¿Los `MF` (centrocampistas) difieren en `KP` respecto a los `FW` (delanteros)? Esto ayuda a ponderar creatividad para ratings por posición.
+
+```{r ttest-kp-mf-fw}
+# Preparar: separar filas por Pos si vienen combinadas
+estad_sep <- estadisticas %>% tidyr::separate_rows(Pos, sep = ",")
+
+tdata <- estad_sep %>% filter(Pos %in% c("MF","FW"), !is.na(KP))
+table(tdata$Pos)
+
+if(length(unique(tdata$Pos))==2){
+  t_res <- t.test(KP ~ Pos, data = tdata)
+  print(t_res)
+} else {
+  cat('No hay dos grupos distintos con datos suficientes para KP.\n')
+}
+
+# Gráfico
+if(nrow(tdata)>0){
+  p <- ggplot(tdata, aes(x=Pos, y=KP, fill=Pos)) +
+    geom_violin(alpha=0.6) + geom_jitter(width=0.15, alpha=0.4) +
+    stat_summary(fun=mean, geom="point", shape=23, size=3, fill="white") +
+    theme_minimal() + labs(title="KP: MF vs FW")
+  print(p)
+}
+```
+
+### Pregunta 2 — ANOVA (market_value: DF vs MF vs FW)
+
+**Pregunta:** ¿El `market_value` difiere entre defensas, centrocampistas y delanteros? Esto nos dice si el mercado valora diferente cada rol.
+
+```{r anova-market-pos}
+anova_data <- estadisticas %>% filter(Pos %in% c("DF","MF","FW","GK"), !is.na(market_value))
+if(nrow(anova_data)>0){
+  anova_res <- aov(market_value ~ Pos, data = anova_data)
+  print(summary(anova_res))
+  # Tukey
+  print(TukeyHSD(anova_res))
+  # Gráfico
+  p_anova <- ggplot(anova_data, aes(x=Pos, y=market_value, fill=Pos)) +
+    geom_boxplot() + theme_minimal() +
+    scale_y_continuous(labels = scales::dollar_format()) +
+    labs(title = "Market value: DF vs MF vs FW vs GK")
+  print(p_anova)
+} else cat("No hay datos para ANOVA de market_value por posición.\n")
+```
+
+### Pregunta 3 — Fisher exact test (Titularidad vs Liga)
+
+**Pregunta:** ¿La probabilidad de ser titular (`Starts>20`) depende de la liga? (Fisher/chi2 según tamaño)
+
+```{r fisher-titular}
+estadisticas <- estadisticas %>% mutate(Titular = ifelse(Starts>15, "Sí", "No"))
+tabla <- table(estadisticas$Titular, estadisticas$Comp)
+print(tabla)
+# Si la tabla es grande use chi-sq, si pequeña use fisher
+if(min(dim(tabla))>1){
+  if(any(tabla < 5)){
+    print(fisher.test(tabla))
+  } else {
+    print(chisq.test(tabla))
+  }
+}
+
+# Heatmap de la tabla
+df_tab <- as.data.frame(tabla)
+colnames(df_tab) <- c("Titular","Comp","Freq")
+ggplot(df_tab, aes(x=Comp, y=Titular, fill=Freq)) + geom_tile() + geom_text(aes(label=Freq)) +
+  scale_fill_viridis_c() + theme_minimal() + labs(title="Titularidad por liga")
+```
+
+### Pregunta 4 — Correlación xG vs Gls (FW)
+
+**Pregunta:** ¿Cuán fuerte es la relación entre `xG` y `Gls` en delanteros? Nos da idea de eficiencia en finalización.
+
+```{r corr-xg-gls}
+cor_data <- estadisticas %>% filter(grepl("FW", Pos), !is.na(xG), !is.na(Gls))
+if(nrow(cor_data)>10){
+  cor_res <- cor.test(cor_data$xG, cor_data$Gls, method = 'pearson')
+  print(cor_res)
+  ggplot(cor_data, aes(x=xG, y=Gls)) + geom_point(aes(size=market_value, color=market_value), alpha=0.7) +
+    scale_color_viridis(option="plasma") + geom_smooth(method='lm', color='red') + theme_minimal() +
+    labs(title='xG vs Gls (delanteros)', color='Market Value', size='Market Value')
+} else cat('Pocos delanteros con xG y Gls para correlación.\n')
+```
+## Correlación entre Edad y Valor de Mercado
+
+Queremos evaluar si existe una relación entre la edad de los jugadores y su valor de mercado. Esto puede dar insights sobre si los jugadores jóvenes se valoran más por potencial o si los jugadores más experimentados aún mantienen altos valores.
+
+```{r correlacion-edad-valor, message=FALSE, warning=FALSE}
+# Filtrar solo jugadores con edad y market_value
+edad_valor <- estadisticas %>%
+  filter(!is.na(Age), !is.na(market_value))
+
+# Calcular correlación de Pearson
+cor_edad_valor <- cor(edad_valor$Age, edad_valor$market_value, method = "pearson")
+cat("Correlación Pearson entre Edad y Valor de Mercado:", round(cor_edad_valor, 3), "\n")
+
+# Gráfico de dispersión con regresión
+ggplot(edad_valor, aes(x = Age, y = market_value)) +
+  geom_point(alpha = 0.6, color = "steelblue") +
+  geom_smooth(method = "lm", se = TRUE, color = "darkred") +
+  theme_minimal() +
+  labs(
+    title = "Relación entre Edad y Valor de Mercado",
+    x = "Edad del Jugador",
+    y = "Valor de Mercado (€)",
+    caption = paste("Correlación Pearson:", round(cor_edad_valor, 3))
+  )
+```
+
+
+### Pregunta 5 — Correlaciones generales y heatmap
+
+**Pregunta:** ¿Qué métricas están más correlacionadas con `market_value`? Heatmap multivariable para detectar drivers.
+
+```{r heatmap-cor}
+vars <- c("Gls","Ast","KP","Carries","Recov","Tkl","Int","xG","xA","market_value")
+vars <- vars[vars %in% names(estadisticas)]
+cmat <- cor(estadisticas %>% select(all_of(vars)), use = "pairwise.complete.obs")
+melted <- reshape2::melt(cmat)
+
+ggplot(melted, aes(Var1, Var2, fill=value)) + geom_tile() +
+  geom_text(aes(label=round(value,2)), color='white', size=3) +
+  scale_fill_viridis(option='C', limits=c(-1,1)) + theme_minimal() +
+  labs(title='Heatmap de correlaciones (métricas clave)') +
+  theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+
+
+
+```{r}
+# Asegúrate de tener tu dataframe con 'Pos' y el resto de variables numéricas
+df <- estadisticas %>%
+  select(Pos, where(is.numeric)) %>%
+  filter(Pos %in% c("FW", "MF", "DF", "GK")) %>%
+  drop_na()
+
+# Convertir Pos en factor (importante para multinom)
+df$Pos <- as.factor(df$Pos)
+
+# Escalar las variables numéricas (dejando Pos fuera)
+df_scaled <- df %>%
+  mutate(across(where(is.numeric), scale))
+
+# Comprobamos estructura
+str(df_scaled)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Parte II — Sistema de Rating y Detección de Chollos
+
+
+
+# 2. Feature Engineering (Variables Derivadas)
+
+```{r feature_engineering}
+# FILTRO CRÍTICO: Solo jugadores con minutos significativos
+MIN_MINUTOS_GK <- 450   # ~5 partidos mínimo para porteros
+MIN_MINUTOS_OTROS <- 450  # ~5 partidos para el resto
+
+cat("Jugadores antes del filtro de minutos:", nrow(estadisticas), "\n")
+
+estadisticas <- estadisticas %>%
+  filter(
+    (Pos == "GK" & Min >= MIN_MINUTOS_GK) |
+    (Pos != "GK" & Min >= MIN_MINUTOS_OTROS)
+  )
+
+cat("Jugadores después del filtro:", nrow(estadisticas), "\n")
+cat("  Porteros:", sum(estadisticas$Pos == "GK"), "\n")
+
+# Crear variables derivadas SOLO con datos robustos
+estadisticas <- estadisticas %>%
+  mutate(
+    # === PORTEROS ===
+    Save_pct = ifelse(!is.na(Save.), Save., 
+                      ifelse(!is.na(SoTA) & SoTA > 0, Saves / SoTA * 100, NA)),
+    
+    CS_pct = ifelse(!is.na(CS) & !is.na(Min) & Min > 0, 
+                    CS / (Min / 90) * 100, NA),
+    
+    Goals_prevented = ifelse(!is.na(PSxG) & !is.na(GA), PSxG - GA, NA),
+    
+    GA90_inv = ifelse(!is.na(GA90) & Pos == "GK", 
+                      2.5 - GA90, NA),
+    
+    PK_total = ifelse(!is.na(PKsv) & !is.na(PKm), PKsv + PKm, 0),
+    PK_save_rate = case_when(
+      PK_total >= 3 ~ PKsv / PK_total * 100,
+      PK_total > 0 ~ 50,
+      TRUE ~ NA_real_
+    ),
+    
+    # === DEFENSAS ===
+    Err_inv = ifelse(!is.na(Err), max(Err, na.rm = TRUE) + 1 - Err, NA),
+    
+    Duel_total = ifelse(!is.na(Won) & !is.na(Lost), Won + Lost, 0),
+    Duel_success = ifelse(Duel_total > 0, Won / Duel_total * 100, 50),
+    
+    # === DELANTEROS ===
+    Goal_efficiency = ifelse(!is.na(npxG) & npxG > 0.5, G.PK / npxG, NA)
+  )
+
+cat("\nVariables derivadas creadas exitosamente\n")
+```
+
+# 3. PCA por Posición
+
+```{r pca_por_posicion}
+realizar_pca_posicion <- function(datos, posicion, n_componentes = 5) {
+  datos_pos <- datos %>% filter(Pos == posicion)
+  
+  if(posicion == "FW") {
+    vars_analisis <- c(
+      "Gls", "Ast", "G.A", "npxG", "xAG", "npxG.xAG", "PrgC", 
+      "Sh", "SoT", "SoT.", "G.Sh", "G.SoT", "np.G.xG",
+      "GCA", "GCA90", "SCA", "SCA90", "Carries", "PrgDist", 
+      "PrgR", "Att.Pen", "CPA"
+    )
+  } else if(posicion == "MF") {
+    vars_analisis <- c(
+      "Cmp", "Att", "Cmp.", "TotDist", "PrgDist", "xA", "KP", "PPA",
+      "CrsPA", "PrgP", "TB", "Sw", "SCA", "SCA90", "Carries", "PrgC", 
+      "Succ", "Succ.", "Mid.3rd", "Recov", "Int", "Tkl", "TklW", 
+      "Ast", "GCA", "GCA90"
+    )
+  } else if(posicion == "DF") {
+    vars_analisis <- c(
+      "Tkl", "TklW", "Tkl.", "Int", "Clr", "Blocks", "Err_inv",
+      "Won", "Won.", "Duel_success", "Recov", "PrgP", "Cmp", "Att", 
+      "Cmp.", "TotDist", "PrgDist", "Touches", "Def.Pen", "Tkl.Int"
+    )
+  } else if(posicion == "GK") {
+    vars_analisis <- c(
+      "Save_pct", "CS_pct", "GA90_inv", "Goals_prevented", 
+      "PSxG.SoT", "Cmp.", "Launch."
+    )
+  }
+  
+  vars_disponibles <- vars_analisis[vars_analisis %in% names(datos_pos)]
+  
+  if(length(vars_disponibles) < 3) {
+    warning(paste("Posición", posicion, "tiene muy pocas variables disponibles"))
+    return(NULL)
+  }
+  
+  datos_pca <- datos_pos[, vars_disponibles]
+  datos_pca <- datos_pca %>% mutate_all(as.numeric)
+  
+  for(col in names(datos_pca)) {
+    if(sum(!is.na(datos_pca[[col]])) > 0) {
+      mediana <- median(datos_pca[[col]], na.rm = TRUE)
+      datos_pca[[col]][is.na(datos_pca[[col]])] <- mediana
+    }
+  }
+  
+  datos_pca <- datos_pca[rowSums(is.na(datos_pca)) < ncol(datos_pca), ]
+  
+  if(nrow(datos_pca) < 10) {
+    warning(paste("Posición", posicion, "tiene muy pocos datos para PCA"))
+    return(NULL)
+  }
+  
+  pca_result <- PCA(datos_pca, scale.unit = TRUE, ncp = min(n_componentes, ncol(datos_pca)), graph = FALSE)
+  
+  return(list(
+    pca = pca_result,
+    variables = vars_disponibles,
+    datos = datos_pca
+  ))
+}
+
+posiciones <- c("FW", "MF", "DF", "GK")
+pca_resultados <- lapply(posiciones, function(pos) {
+  tryCatch({
+    realizar_pca_posicion(estadisticas, pos)
+  }, error = function(e) {
+    cat("Error en posición", pos, ":", e$message, "\n")
+    return(NULL)
+  })
+})
+names(pca_resultados) <- posiciones
+
+cat("\nPCA completado para todas las posiciones\n")
+for(pos in posiciones) {
+  if(!is.null(pca_resultados[[pos]])) {
+    cat(sprintf("  %s: %d jugadores, %d variables\n", 
+                pos, 
+                nrow(pca_resultados[[pos]]$datos),
+                length(pca_resultados[[pos]]$variables)))
+  }
+}
+```
+
+```{r visualizacion_pca}
+contribuciones_df <- data.frame()
+
+for(pos in posiciones) {
+  if(!is.null(pca_resultados[[pos]])) {
+    contrib <- data.frame(
+      posicion = pos,
+      variable = rownames(pca_resultados[[pos]]$pca$var$contrib),
+      contribucion = pca_resultados[[pos]]$pca$var$contrib[,1]
+    )
+    contrib <- contrib %>%
+      arrange(desc(contribucion)) %>%
+      slice_head(n = 10)
+    contribuciones_df <- rbind(contribuciones_df, contrib)
+  }
+}
+
+ggplot(contribuciones_df, aes(x = reorder(variable, contribucion), 
+                              y = contribucion, fill = posicion)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~posicion, scales = "free_y") +
+  coord_flip() +
+  scale_fill_viridis_d() +
+  theme_minimal() +
+  labs(title = "Top 10 Variables más Importantes por Posición",
+       subtitle = "Basado en contribuciones al primer componente principal",
+       x = "Variables", y = "Contribución (%)", fill = "Posición") +
+  theme(axis.text.y = element_text(size = 8),
+        strip.text = element_text(size = 12, face = "bold"),
+        legend.position = "bottom")
+```
+
+# 4. Sistema de Rating (0-100)
+
+
+```{r crear_rating_por_posicion}
+calc_weights_from_pca <- function(pca_obj) {
+  contrib <- pca_obj$var$contrib
+  eig <- pca_obj$eig
+  ncomp <- ncol(contrib)
+  varprop <- eig[1:ncomp, 2] / 100
+  imp <- as.numeric(contrib %*% varprop)
+  imp[imp < 0] <- 0
+  if(sum(imp) == 0) imp <- rep(1 / length(imp), length(imp))
+  weights <- imp / sum(imp)
+  names(weights) <- rownames(contrib)
+  return(weights)
+}
+
+# --- Definir umbrales para "jugadores en rotación" ---
+min_starts <- quantile(estadisticas$Starts, 0.25, na.rm = TRUE)  # percentil 25% titularidades
+min_min <- quantile(estadisticas$Min, 0.25, na.rm = TRUE)        # percentil 25% minutos
+
+ratings_list <- list()
+for(pos in posiciones) {
+  pca_res <- pca_resultados[[pos]]
+  if(is.null(pca_res)) next
+  
+  vars_used <- pca_res$variables
+  pca_data <- pca_res$datos
+  col_means <- colMeans(pca_data, na.rm = TRUE)
+  col_sds <- apply(pca_data, 2, sd, na.rm = TRUE)
+  col_sds[col_sds == 0 | is.na(col_sds)] <- 1
+  
+  weights <- calc_weights_from_pca(pca_res$pca)
+  weights <- weights[vars_used]
+  weights[is.na(weights)] <- 0
+  if(sum(weights) <= 0) weights <- rep(1/length(weights), length(weights))
+  weights <- weights / sum(weights)
+  
+  # --- Seleccionar solo jugadores en rotación ---
+  jugadores_pos <- estadisticas %>%
+    filter(
+      Pos == pos,
+      Starts >= min_starts | Min >= min_min     # <- criterio de rotación
+    ) %>%
+    select(Player, Squad, all_of(vars_used))
+  
+  if(nrow(jugadores_pos) == 0) next
+  
+  jugadores_num <- jugadores_pos %>%
+    mutate(across(all_of(vars_used), as.character)) %>%
+    mutate(across(all_of(vars_used), ~ gsub("%", "", .x))) %>%
+    mutate(across(all_of(vars_used), ~ {
+      v <- suppressWarnings(as.numeric(.x))
+      if(all(is.na(v))) v <- suppressWarnings(as.numeric(gsub(",", ".", .x)))
+      v
+    }))
+  
+  for(v in vars_used) {
+    if(!v %in% names(jugadores_num)) next
+    jugadores_num[[v]] <- as.numeric(jugadores_num[[v]])
+    na_idx <- is.na(jugadores_num[[v]])
+    if(any(na_idx)) jugadores_num[[v]][na_idx] <- col_means[v]
+  }
+  
+  scaled_mat <- sweep(as.matrix(jugadores_num[vars_used]), 2, col_means[vars_used], "-")
+  scaled_mat <- sweep(scaled_mat, 2, col_sds[vars_used], "/")
+  score_raw <- as.numeric(scaled_mat %*% as.numeric(weights))
+  
+  if(length(score_raw) == 0) next
+  if(max(score_raw) == min(score_raw)) {
+    rating_0_100 <- rep(50, length(score_raw))
+  } else {
+    rating_0_100 <- 100 * (score_raw - min(score_raw)) / (max(score_raw) - min(score_raw))
+  }
+  
+  ratings_df <- jugadores_pos %>%
+    select(Player, Squad) %>%
+    mutate(
+      pos = pos,
+      score_raw = score_raw,
+      rating_pca = rating_0_100
+    )
+  
+  attr(ratings_df, "weights") <- weights
+  ratings_list[[pos]] <- ratings_df
+}
+
+ratings_all <- bind_rows(ratings_list)
+
+cat("Ratings PCA calculados (sin ajuste, solo jugadores en rotación). Ejemplo:\n")
+print(ratings_all %>% 
+      group_by(pos) %>% 
+      slice_max(rating_pca, n = 3) %>% 
+      arrange(pos, desc(rating_pca)))
+```
+
+# 5. Cálculo Preliminar de Team Scores (para factor de ajuste)
+
+```{r calcular_team_scores_preliminar}
+# IMPORTANTE: Usar rating_pca (sin ajustar) para calcular overall inicial
+
+min_starts <- median(estadisticas$Starts, na.rm = TRUE)
+min_min <- median(estadisticas$Min, na.rm = TRUE)
+
+pos_map <- c(FW = "Attack", MF = "Midfield", DF = "Defense", GK = "Goalkeeping")
+
+# Crear tabla temporal para calcular overall inicial
+team_pos_scores_temp <- ratings_all %>%
+  left_join(estadisticas %>% select(Player, Starts, Min), by = "Player") %>%
+  mutate(is_starter = (!is.na(Starts) & Starts >= min_starts) |
+                     (!is.na(Min) & Min >= min_min)) %>%
+  group_by(Squad, pos) %>%
+  summarise(
+    n_starters = sum(is_starter & !is.na(rating_pca)),
+    mean_starters = ifelse(n_starters > 0,
+                           mean(rating_pca[is_starter & !is.na(rating_pca)], na.rm = TRUE),
+                           NA_real_),
+    mean_all = mean(rating_pca, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(mean_used = ifelse(!is.na(mean_starters), mean_starters, mean_all),
+         dimension = pos_map[pos]) %>%
+  filter(!is.na(dimension)) %>%
+  select(Squad, dimension, mean_used)
+
+dims <- c("Attack","Midfield","Defense","Goalkeeping")
+team_scores_temp <- team_pos_scores_temp %>%
+  pivot_wider(names_from = dimension, values_from = mean_used)
+
+for(d in dims) if(!d %in% names(team_scores_temp)) team_scores_temp[[d]] <- NA_real_
+
+team_league <- estadisticas %>%
+  group_by(Squad) %>%
+  summarise(Comp = names(sort(table(Comp), decreasing = TRUE))[1], .groups = "drop")
+
+team_scores_temp <- team_scores_temp %>%
+  left_join(team_league, by = "Squad") %>%
+  mutate(
+    Attack = ifelse(is.na(Attack), 
+                    mean(ratings_all$rating_pca[ratings_all$pos=="FW"], na.rm=TRUE), Attack),
+    Midfield = ifelse(is.na(Midfield), 
+                      mean(ratings_all$rating_pca[ratings_all$pos=="MF"], na.rm=TRUE), Midfield),
+    Defense = ifelse(is.na(Defense), 
+                     mean(ratings_all$rating_pca[ratings_all$pos=="DF"], na.rm=TRUE), Defense),
+    Goalkeeping = ifelse(is.na(Goalkeeping), 
+                         mean(ratings_all$rating_pca[ratings_all$pos=="GK"], na.rm=TRUE), Goalkeeping)
+  ) %>%
+  mutate(overall = Attack * 0.3 + Midfield * 0.3 + Defense * 0.3 + Goalkeeping * 0.1)
+
+cat("Overall preliminar calculado. Top 10 equipos:\n")
+print(team_scores_temp %>% select(Squad, overall) %>% arrange(desc(overall)) %>% head(10))
+```
+
+# 6. AJUSTE POR NIVEL DE EQUIPO (OPCIÓN 1)
+
+```{r ajuste_por_equipo}
+cat("\n=== APLICANDO AJUSTE POR NIVEL DE EQUIPO ===\n\n")
+
+# Calcular factor de ajuste basado en overall del equipo
+team_quality_factor <- team_scores_temp %>%
+  mutate(
+    quality_factor = case_when(
+      overall >= 70 ~ 1.15,   # Equipos top: +15% bonus
+      overall >= 65 ~ 1.10,   # Equipos muy buenos: +10%
+      overall >= 60 ~ 1.05,   # Equipos buenos: +5%
+      overall >= 55 ~ 1.00,   # Equipos medio-altos: neutro
+      overall >= 50 ~ 0.98,   # Equipos medios: -2%
+      TRUE ~ 0.95             # Equipos bajos: -5%
+    )
+  ) %>%
+  select(Squad, overall, quality_factor)
+
+cat("Distribución de factores de ajuste:\n")
+print(table(team_quality_factor$quality_factor))
+
+# Aplicar ajuste SOLO a DF y GK
+ratings_all <- ratings_all %>%
+  left_join(team_quality_factor, by = "Squad") %>%
+  mutate(
+    rating_ajustado = case_when(
+      pos %in% c("DF", "GK") ~ pmin(rating_pca * quality_factor, 100),
+      TRUE ~ rating_pca
+    ),
+    rating_final = rating_ajustado
+  ) %>%
+  select(-quality_factor, -overall)
+
+cat("\nAjuste aplicado. Comparación antes/después:\n")
+comparacion <- ratings_all %>%
+  filter(pos %in% c("DF", "GK")) %>%
+  mutate(diferencia = rating_final - rating_pca) %>%
+  group_by(pos) %>%
+  summarise(
+    media_antes = mean(rating_pca, na.rm = TRUE),
+    media_despues = mean(rating_final, na.rm = TRUE),
+    diferencia_media = mean(diferencia, na.rm = TRUE),
+    .groups = "drop"
+  )
+print(comparacion)
+
+# Añadir rating final a estadisticas
+estadisticas <- estadisticas %>%
+  left_join(ratings_all %>% select(Player, pos, rating_pca, rating_ajustado, rating_final),
+            by = c("Player" = "Player", "Pos" = "pos"))
+```
+
+```{r comparacion_top_jugadores}
+cat("\n=== TOP JUGADORES DESPUÉS DEL AJUSTE ===\n\n")
+
+TOP_N <- 10
+
+for(p in posiciones) {
+  cat("\n", rep("=", 50), "\n", sep="")
+  cat("POSICIÓN:", p, "\n")
+  cat(rep("=", 50), "\n", sep="")
+  
+  top_pos <- ratings_all %>%
+    filter(pos == p) %>%
+    arrange(desc(rating_final)) %>%
+    head(TOP_N) %>%
+    left_join(estadisticas %>% select(Player, Age, Min), by = "Player") %>%
+    select(Player, rating_pca, rating_final, Age, Min)
+  
+  print(top_pos)
+}
+```
+
+```{r plot_top_players_ajustado, fig.width=10, fig.height=7}
+top_players <- ratings_all %>%
+  filter(!is.na(rating_final)) %>%
+  group_by(pos) %>%
+  slice_max(rating_final, n = TOP_N, with_ties = FALSE) %>%
+  arrange(pos, desc(rating_final)) %>%
+  mutate(Player = factor(Player, levels = rev(unique(Player)))) %>%
+  ungroup()
+
+ggplot(top_players, aes(x = rating_final, y = Player, fill = rating_final)) +
+  geom_col(width = 0.7, show.legend = FALSE) +
+  geom_text(aes(label = sprintf("%.1f", rating_final)), 
+            hjust = -0.1, size = 3, color = "black") +
+  facet_wrap(~pos, scales = "free_y", ncol = 2) +
+  scale_fill_viridis_c(option = "D", begin = 0.2, end = 0.85) +
+  coord_cartesian(xlim = c(0, 105)) +
+  labs(title = "Top Jugadores por Posición — Rating Ajustado (0–100)",
+       subtitle = paste0("Top ", TOP_N, " jugadores (DF/GK ajustados por nivel de equipo)"),
+       x = "Rating Ajustado (0-100)", y = "") +
+  theme_minimal(base_size = 11) +
+  theme(strip.text = element_text(size = 12, face = "bold"),
+        axis.text.y = element_text(size = 9))
+```
+
+# 7. Recalcular Team Scores con Ratings Ajustados
+
+```{r recalcular_team_scores}
+team_pos_scores_adj <- ratings_all %>%
+  left_join(estadisticas %>% select(Player, Starts, Min, Comp), by = "Player") %>%
+  mutate(is_starter = (!is.na(Starts) & Starts >= min_starts) |
+                     (!is.na(Min) & Min >= min_min)) %>%
+  group_by(Squad, pos) %>%
+  summarise(
+    n_starters = sum(is_starter & !is.na(rating_final)),
+    mean_starters = ifelse(n_starters > 0,
+                           mean(rating_final[is_starter & !is.na(rating_final)], na.rm = TRUE),
+                           NA_real_),
+    mean_all = mean(rating_final, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(mean_used = ifelse(!is.na(mean_starters), mean_starters, mean_all),
+         dimension = pos_map[pos]) %>%
+  filter(!is.na(dimension)) %>%
+  select(Squad, dimension, mean_used)
+
+team_scores_wide_adj <- team_pos_scores_adj %>%
+  pivot_wider(names_from = dimension, values_from = mean_used)
+
+for(d in dims) if(!d %in% names(team_scores_wide_adj)) team_scores_wide_adj[[d]] <- NA_real_
+
+team_scores_wide_adj <- team_scores_wide_adj %>%
+  left_join(team_league, by = "Squad") %>%
+  mutate(
+    Attack = ifelse(is.na(Attack), 
+                    mean(ratings_all$rating_final[ratings_all$pos=="FW"], na.rm=TRUE), Attack),
+    Midfield = ifelse(is.na(Midfield), 
+                      mean(ratings_all$rating_final[ratings_all$pos=="MF"], na.rm=TRUE), Midfield),
+    Defense = ifelse(is.na(Defense), 
+                     mean(ratings_all$rating_final[ratings_all$pos=="DF"], na.rm=TRUE), Defense),
+    Goalkeeping = ifelse(is.na(Goalkeeping), 
+                         mean(ratings_all$rating_final[ratings_all$pos=="GK"], na.rm=TRUE), Goalkeeping)
+  ) %>%
+  mutate(overall = Attack * 0.3 + Midfield * 0.3 + Defense * 0.3 + Goalkeeping * 0.1) %>%
+  arrange(desc(overall))
+
+team_scores <- team_scores_wide_adj
+
+cat("Team scores recalculados con ratings ajustados. Top 10:\n")
+print(team_scores %>% select(Squad, Comp, overall, Attack, Midfield, Defense, Goalkeeping) %>% head(10))
+```
+
+```{r radar_top_equipos, fig.width=14, fig.height=10}
+radar_df <- team_scores %>%
+  select(Squad, Comp, all_of(dims), overall) %>%
+  pivot_longer(cols = all_of(dims), names_to = "dimension", values_to = "score")
+
+angles <- seq(0, 2*pi, length.out = length(dims) + 1)[1:length(dims)]
+dim_angles <- data.frame(
+  dimension = dims,
+  angle = angles,
+  x_pos = cos(angles),
+  y_pos = sin(angles)
+)
+
+radar_df <- radar_df %>%
+  left_join(dim_angles, by = "dimension") %>%
+  mutate(
+    x = (score/100) * x_pos,
+    y = (score/100) * y_pos
+  )
+
+label_df <- dim_angles %>%
+  mutate(
+    x_label = 1.2 * x_pos,
+    y_label = 1.2 * y_pos
+  )
+
+reference_circles <- data.frame(
+  x = rep(c(0.25, 0.5, 0.75, 1.0), each = length(dims)) * rep(dim_angles$x_pos, 4),
+  y = rep(c(0.25, 0.5, 0.75, 1.0), each = length(dims)) * rep(dim_angles$y_pos, 4),
+  level = rep(c(25, 50, 75, 100), each = length(dims))
+)
+
+TOP_TEAMS <- 15
+top_teams <- team_scores %>%
+  arrange(desc(overall)) %>%
+  slice(1:TOP_TEAMS) %>%
+  pull(Squad)
+
+radar_df_top <- radar_df %>%
+  filter(Squad %in% top_teams) %>%
+  mutate(Squad = factor(Squad, levels = top_teams))
+
+ggplot(radar_df_top, aes(group = Squad)) +
+  geom_polygon(data = reference_circles, 
+               aes(x = x, y = y, group = level), 
+               fill = NA, color = "grey90", linetype = "dotted", 
+               alpha = 0.5, size = 0.3, inherit.aes = FALSE) +
+  geom_segment(data = dim_angles, 
+               aes(x = 0, y = 0, xend = x_pos, yend = y_pos),
+               color = "grey70", size = 0.3, inherit.aes = FALSE) +
+  geom_polygon(aes(x = x, y = y, color = Squad), 
+               fill = NA, size = 0.6, alpha = 0.7) +
+  geom_point(aes(x = x, y = y, color = Squad), size = 1.5, alpha = 1) +
+  geom_text(data = label_df, 
+            aes(x = x_label, y = y_label, label = dimension),
+            size = 5, fontface = "bold", inherit.aes = FALSE) +
+  coord_equal() +
+  scale_color_viridis_d(option = "turbo", end = 0.95) +
+  labs(title = paste("Top", TOP_TEAMS, "Equipos: Perfil Radar (Ajustado)"),
+       subtitle = "Attack (30%) / Midfield (30%) / Defense (30%) / Goalkeeping (10%)",
+       color = "Equipo") +
+  theme_void(base_size = 12) +
+  theme(
+    legend.position = "right",
+    legend.text = element_text(size = 9),
+    legend.key.size = unit(0.5, "cm"),
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5, margin = margin(b = 15)),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+```
+
+```{r heatmap_equipos, fig.width=12, fig.height=10}
+heat_df <- team_scores %>%
+  select(Squad, Comp, all_of(dims), overall) %>%
+  pivot_longer(cols = all_of(dims), names_to = "dimension", values_to = "score") %>%
+  group_by(Comp) %>%
+  arrange(desc(overall)) %>%
+  mutate(Squad = factor(Squad, levels = unique(Squad))) %>%
+  ungroup()
+
+ggplot(heat_df, aes(x = dimension, y = Squad, fill = score)) +
+  geom_tile(color = "white") +
+  scale_fill_viridis_c(option = "D", limits = c(0,100), na.value = "grey90") +
+  facet_wrap(~Comp, scales = "free_y", ncol = 1) +
+  labs(title = "Perfil por Equipo: Attack / Midfield / Defense / Goalkeeping",
+       subtitle = "Medias de titulares (con ajuste por nivel para DF/GK) — ordenados por overall",
+       x = "", y = "Equipo", fill = "Rating (0-100)") +
+  theme_minimal(base_size = 11) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        strip.text = element_text(face = "bold"),
+        legend.position = "bottom")
+```
+
+```{r top_equipos_por_dimension, fig.width=12, fig.height=9}
+TOP_N_DIM <- 12
+
+long_scores <- team_scores %>%
+  select(Squad, Comp, all_of(dims)) %>%
+  pivot_longer(cols = all_of(dims), names_to = "dimension", values_to = "score") %>%
+  mutate(dimension = factor(dimension, levels = dims))
+
+top_by_dim <- long_scores %>%
+  group_by(dimension) %>%
+  slice_max(score, n = TOP_N_DIM, with_ties = FALSE) %>%
+  arrange(desc(score)) %>%
+  mutate(Squad = factor(Squad, levels = rev(unique(Squad)))) %>%
+  ungroup() %>%
+  mutate(
+    label_col = ifelse(score >= 50, "white", "black"),
+    label_x = ifelse(score >= 50, pmax(score - 3, 0), pmin(score + 3, 100)),
+    label_hjust = ifelse(score >= 50, 1, 0)
+  )
+
+ggplot(top_by_dim, aes(x = score, y = Squad, fill = Comp)) +
+  geom_col(width = 0.7) +
+  geom_text(aes(x = label_x, label = sprintf("%.1f", score), color = label_col),
+            size = 3, hjust = top_by_dim$label_hjust, show.legend = FALSE) +
+  facet_wrap(~dimension, ncol = 2, scales = "free_y") +
+  scale_fill_viridis_d(option = "D") +
+  scale_color_identity() +
+  coord_cartesian(xlim = c(0, 100)) +
+  labs(title = "Top Equipos por Dimensión (Ajustado)",
+       subtitle = paste0("Top ", TOP_N_DIM, " por Attack / Midfield / Defense / Goalkeeping"),
+       x = "Rating (0-100)", y = NULL, fill = "Liga") +
+  theme_minimal(base_size = 12) +
+  theme(strip.text = element_text(size = 12, face = "bold"),
+        axis.text.y = element_text(size = 9),
+        legend.position = "bottom")
+```
+
+# 8. Sistema de Detección de Chollos
+
+```{r modelo_chollos}
+df_chollos <- estadisticas %>%
+  filter(!is.na(rating_final) & !is.na(market_value) & !is.na(Age) & market_value > 0) %>%
+  mutate(log_value = log(market_value))
+
+cat("Jugadores en análisis de chollos:", nrow(df_chollos), "\n")
+
+modelo_valor <- lm(log_value ~ rating_final * Pos + I(20/Age), data = df_chollos)
+
+cat("\nResumen del modelo de predicción de valor:\n")
+print(summary(modelo_valor))
+
+df_chollos <- df_chollos %>%
+  mutate(
+    predicted_log = predict(modelo_valor),
+    residual = log_value - predicted_log,
+    z_residual = scale(residual)[,1]
+  )
+
+df_chollos <- df_chollos %>%
+  mutate(
+    categoria = case_when(
+      z_residual < -1.5 ~ "Chollo extremo",
+      z_residual < -1.0 ~ "Chollo",
+      z_residual > 1.5 ~ "Sobrepagado",
+      z_residual > 1.0 ~ "Caro",
+      TRUE ~ "Normal"
+    ),
+    categoria = factor(categoria, levels = c("Chollo extremo", "Chollo", "Normal", "Caro", "Sobrepagado"))
+  )
+
+cat("\nDistribución de categorías:\n")
+print(table(df_chollos$categoria))
+```
+
+```{r plot_chollos_general, fig.width=12, fig.height=8}
+highlight_chollos <- df_chollos %>%
+  filter(categoria %in% c("Chollo extremo", "Chollo", "Sobrepagado"))
+
+ggplot(df_chollos, aes(x = rating_final, y = market_value)) +
+  geom_point(aes(color = categoria), alpha = 0.4, size = 2) +
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "black", linetype = "dashed") +
+  geom_point(data = highlight_chollos, aes(color = categoria), size = 3) +
+  geom_text_repel(
+    data = highlight_chollos %>% filter(categoria == "Chollo extremo"),
+    aes(label = Player),
+    size = 2.5,
+    max.overlaps = 15,
+    box.padding = 0.5
+  ) +
+  scale_y_log10(labels = scales::dollar_format(prefix = "€", suffix = "M", scale = 1e-6)) +
+  scale_color_manual(
+    values = c("Chollo extremo" = "#00BA38", "Chollo" = "#619CFF", 
+               "Normal" = "grey70", "Caro" = "#F8766D", "Sobrepagado" = "#FF0000")
+  ) +
+  facet_wrap(~Pos, scales = "free") +
+  labs(
+    title = "Detección de Chollos y Sobrepagados por Posición",
+    subtitle = "Basado en modelo: log(valor) ~ rating_ajustado * posición + edad",
+    x = "Rating Ajustado (0-100)",
+    y = "Valor de Mercado (escala log)",
+    color = "Categoría"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    strip.text = element_text(face = "bold", size = 11),
+    legend.position = "bottom"
+  )
+```
+
+```{r plot_residuales, fig.width=12, fig.height=6}
+ggplot(df_chollos, aes(x = rating_final, y = residual, color = categoria)) +
+  geom_point(alpha = 0.5, size = 2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  geom_hline(yintercept = c(-1.5, 1.5) * sd(df_chollos$residual), 
+             linetype = "dotted", color = "red") +
+  geom_text_repel(
+    data = df_chollos %>% filter(z_residual < -1.5),
+    aes(label = Player),
+    size = 2.5,
+    max.overlaps = 10
+  ) +
+  scale_color_manual(
+    values = c("Chollo extremo" = "#00BA38", "Chollo" = "#619CFF", 
+               "Normal" = "grey70", "Caro" = "#F8766D", "Sobrepagado" = "#FF0000")
+  ) +
+  facet_wrap(~Pos, ncol = 2) +
+  labs(
+    title = "Residuales del Modelo de Valor por Posición",
+    subtitle = "Valores negativos = infravalorados (chollos) | Positivos = sobrevalorados",
+    x = "Rating Ajustado (0-100)",
+    y = "Residual (log valor observado - esperado)",
+    color = "Categoría"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    strip.text = element_text(face = "bold"),
+    legend.position = "bottom"
+  )
+```
+
+```{r top_chollos_tabla}
+top_chollos <- df_chollos %>%
+  filter(z_residual < -1.0) %>%
+  arrange(z_residual) %>%
+  select(Player, Squad, Pos, Age, rating_final, market_value, z_residual, categoria) %>%
+  head(20)
+
+cat("\n=== TOP 20 CHOLLOS ===\n")
+print(top_chollos)
+
+top_caros <- df_chollos %>%
+  filter(z_residual > 1.0) %>%
+  arrange(desc(z_residual)) %>%
+  select(Player, Squad, Pos, Age, rating_final, market_value, z_residual, categoria) %>%
+  head(20)
+
+cat("\n=== TOP 20 SOBREPAGADOS ===\n")
+print(top_caros)
+```
+
+# 9. Recomendaciones de Fichajes por Equipo
+
+```{r preparar_necesidades_equipos}
+team_needs <- team_scores %>%
+  pivot_longer(cols = c("Attack","Midfield","Defense","Goalkeeping"),
+               names_to = "dimension", values_to = "score") %>%
+  group_by(Squad) %>%
+  slice_min(score, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(Squad, dimension, need_score = score)
+
+dim_to_pos <- data.frame(
+  dimension = c("Attack", "Midfield", "Defense", "Goalkeeping"),
+  Pos_needed = c("FW", "MF", "DF", "GK")
+)
+
+team_needs <- team_needs %>%
+  left_join(dim_to_pos, by = "dimension")
+
+cat("Necesidades por equipo calculadas\n")
+```
+
+```{r presupuesto_equipos}
+df_equipos <- estadisticas %>%
+  filter(!is.na(market_value)) %>%
+  group_by(Squad) %>%
+  summarise(
+    total_value = sum(market_value, na.rm = TRUE),
+    n_players = n(),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(total_value)) %>%
+  mutate(
+    presupuesto_group = case_when(
+      total_value >= quantile(total_value, 0.66) ~ "Top",
+      total_value >= quantile(total_value, 0.33) ~ "Medio",
+      TRUE ~ "Bajo"
+    )
+  )
+
+rango_precios <- data.frame(
+  group = c("Top", "Medio", "Bajo"),
+  min_val = c(5e6, 1e6, 0.2e6),
+  max_val = c(80e6, 15e6, 5e6)
+)
+
+cat("\nDistribución de equipos por presupuesto:\n")
+print(table(df_equipos$presupuesto_group))
+```
+
+```{r recomendaciones_fichajes}
+jugadores_disponibles <- df_chollos %>%
+  filter(z_residual < -0.5) %>%
+  select(Player, Squad, Pos, Age, rating_final, market_value, z_residual, categoria)
+
+recomendaciones <- team_needs %>%
+  left_join(df_equipos %>% select(Squad, presupuesto_group), by = "Squad") %>%
+  left_join(rango_precios, by = c("presupuesto_group" = "group")) %>%
+  rowwise() %>%
+  mutate(
+    fichajes = list({
+      candidatos <- jugadores_disponibles %>%
+        filter(
+          Pos == Pos_needed,
+          market_value >= min_val,
+          market_value <= max_val,
+          Squad != Squad
+        ) %>%
+        arrange(z_residual) %>%
+        head(3)
+      
+      if(nrow(candidatos) == 0) return(data.frame())
+      candidatos
+    })
+  ) %>%
+  ungroup()
+
+recomendaciones_final <- recomendaciones %>%
+  select(Squad, dimension, Pos_needed, need_score, presupuesto_group, fichajes) %>%
+  tidyr::unnest(fichajes) %>%
+  filter(!is.na(Player)) %>%
+  arrange(Squad, z_residual) %>%
+  group_by(Squad) %>%
+  slice_head(n = 3) %>%
+  ungroup()
+
+cat("\n=== RECOMENDACIONES DE FICHAJES ===\n")
+cat("Top 3 fichajes recomendados por equipo según necesidad\n\n")
+print(recomendaciones_final %>% 
+      select(Squad, dimension, Player, Pos, Age, rating_final, market_value, z_residual))
+```
+
+```{r ejemplo_recomendaciones}
+equipos_ejemplo <- sample(unique(recomendaciones_final$Squad), min(5, length(unique(recomendaciones_final$Squad))))
+
+cat("\n=== EJEMPLOS DE RECOMENDACIONES ===\n\n")
+for(equipo in equipos_ejemplo) {
+  cat("\n", rep("=", 60), "\n", sep="")
+  cat("EQUIPO:", equipo, "\n")
+  
+  necesidad <- team_needs %>% filter(Squad == equipo)
+  cat("Necesidad principal:", necesidad$dimension, 
+      "(score actual:", round(necesidad$need_score, 1), ")\n\n")
+  
+  fichas <- recomendaciones_final %>% filter(Squad == equipo)
+  
+  if(nrow(fichas) > 0) {
+    cat("Fichajes recomendados:\n")
+    for(i in 1:nrow(fichas)) {
+      cat(sprintf("  %d. %s (%s, %d años) - Rating: %.1f - Valor: €%.1fM - Chollo score: %.2f\n",
+                  i, fichas$Player[i], fichas$Pos[i], fichas$Age[i],
+                  fichas$rating_final[i], fichas$market_value[i]/1e6, fichas$z_residual[i]))
+    }
+  } else {
+    cat("  No se encontraron fichajes en el rango de presupuesto\n")
+  }
+}
+```
+
+# 10. Resumen y Conclusiones
+
+```{r resumen_final}
+cat("\n")
+cat(rep("=", 70), "\n", sep="")
+cat("               RESUMEN DEL ANÁLISIS\n")
+cat(rep("=", 70), "\n\n", sep="")
+
+cat("1. SISTEMA DE RATING\n")
+cat("   - Basado en PCA específico por posición\n")
+cat("   - Porteros: penalización por goles recibidos, prioridad a ratios\n")
+cat("   - Defensas: penalización por errores, énfasis en ratios de éxito\n")
+cat("   - AJUSTE: DF y GK de equipos top reciben bonus de hasta +15%\n")
+cat("   - Overall: 30% Attack + 30% Midfield + 30% Defense + 10% GK\n\n")
+
+cat("2. TOP 5 EQUIPOS\n")
+top5 <- team_scores %>% 
+  arrange(desc(overall)) %>% 
+  head(5) %>%
+  select(Squad, Comp, overall, Attack, Midfield, Defense, Goalkeeping)
+print(top5)
+
+cat("\n3. MEJOR EQUIPO POR DIMENSIÓN\n")
+for(dim in dims) {
+  mejor <- team_scores %>% 
+    arrange(desc(.data[[dim]])) %>% 
+    slice(1) %>%
+    pull(Squad)
+  score <- team_scores %>% 
+    arrange(desc(.data[[dim]])) %>% 
+    slice(1) %>%
+    pull(dim)
+  cat(sprintf("   %s: %s (%.1f)\n", dim, mejor, score))
+}
+
+cat("\n4. CHOLLOS DETECTADOS\n")
+cat("   Total de chollos:", sum(df_chollos$z_residual < -1.0), "\n")
+cat("   Total sobrepagados:", sum(df_chollos$z_residual > 1.0), "\n")
+
+cat("\n5. RECOMENDACIONES GENERADAS\n")
+cat("   Equipos con recomendaciones:", length(unique(recomendaciones_final$Squad)), "\n")
+cat("   Total de fichajes sugeridos:", nrow(recomendaciones_final), "\n")
+
+cat("\n")
+cat(rep("=", 70), "\n", sep="")
+cat("                    FIN DEL ANÁLISIS\n")
+cat(rep("=", 70), "\n", sep="")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

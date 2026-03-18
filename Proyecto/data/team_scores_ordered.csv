@@ -1,0 +1,97 @@
+"Squad","Comp","Attack","Midfield","Defense","Goalkeeping","overall"
+"Brentford","eng Premier League",53,49.5,59.9,86.6,62.3
+"Chelsea","eng Premier League",36.1,68.4,61.2,82.8,62.1
+"Liverpool","eng Premier League",54.6,49.3,76.6,67,61.9
+"Newcastle Utd","eng Premier League",46.4,50.5,68,81.1,61.5
+"Atalanta","it Serie A",61.3,50.3,57.1,75.7,61.1
+"Mainz 05","de Bundesliga",43.8,52.4,56.6,89.7,60.6
+"Crystal Palace","eng Premier League",38.2,36.6,81,86,60.5
+"Barcelona","es La Liga",69.3,41.7,63.6,66.6,60.3
+"Nott'ham Forest","eng Premier League",40.7,40.1,73,81.7,58.9
+"Arsenal","eng Premier League",39.7,50.2,56,85,57.8
+"Espanyol","es La Liga",27.9,30.8,76,95.7,57.6
+"Auxerre","fr Ligue 1",36.6,38.7,61.9,91.7,57.2
+"Dortmund","de Bundesliga",38.5,42,69.9,76,56.6
+"Real Madrid","es La Liga",54.4,52.4,59.7,59.4,56.5
+"Eint Frankfurt","de Bundesliga",56.9,32.9,65.4,69.7,56.2
+"Paris S-G","fr Ligue 1",59.9,49.9,65.3,49.6,56.2
+"Marseille","fr Ligue 1",45.6,40.2,58.3,80.6,56.2
+"Manchester City","eng Premier League",43.8,48.9,61.2,69.8,55.9
+"Leverkusen","de Bundesliga",43.1,45.5,65.5,69,55.8
+"Osasuna","es La Liga",36.6,35,51.6,100,55.8
+"Werder Bremen","de Bundesliga",34.6,48.9,57.2,81.9,55.7
+"Wolves","eng Premier League",36.1,41.6,64.8,78.1,55.1
+"Valencia","es La Liga",27.5,42.5,70.2,79.7,55
+"Fulham","eng Premier League",39.5,38.1,66.3,73.3,54.3
+"Saint-Étienne","fr Ligue 1",34.6,26.3,66.8,89.5,54.3
+"Stuttgart","de Bundesliga",37.3,45.3,56.3,77.6,54.1
+"Bournemouth","eng Premier League",37.8,43.8,56.4,78.2,54.1
+"Hoffenheim","de Bundesliga",31.7,52.7,52.9,78.8,54
+"Roma","it Serie A",34.4,33.3,67,81,53.9
+"Nice","fr Ligue 1",40.8,34.2,60.7,78.5,53.5
+"Brighton","eng Premier League",38.2,33.2,66.5,75.9,53.4
+"Bayern Munich","de Bundesliga",51.4,47.1,52.1,62.3,53.2
+"Milan","it Serie A",33.9,42.9,54.1,81.5,53.1
+"Lyon","fr Ligue 1",37.4,33.6,63.2,77.8,53
+"Atlético Madrid","es La Liga",47.8,39.4,55.5,68.7,52.8
+"Aston Villa","eng Premier League",31.7,40.6,56.7,82.3,52.8
+"Inter","it Serie A",43,56.4,48.9,62.5,52.7
+"Napoli","it Serie A",35.4,35.6,66.2,72.6,52.5
+"Lazio","it Serie A",37.8,47.2,57.4,64.9,51.8
+"Everton","eng Premier League",21,32.2,60.6,93.1,51.7
+"Brest","fr Ligue 1",28.8,34.9,57.2,85.4,51.6
+"Sevilla","es La Liga",35.9,31.2,66.5,69.9,50.9
+"Celta Vigo","es La Liga",29.3,38.8,65.2,69.6,50.7
+"Leganés","es La Liga",23.5,28.9,52.7,96.9,50.5
+"Villarreal","es La Liga",36.8,53,56.8,55.4,50.5
+"Juventus","it Serie A",35.7,43.6,53.5,68.6,50.4
+"Wolfsburg","de Bundesliga",33.8,27.9,66.5,72.7,50.2
+"West Ham","eng Premier League",44.8,28.4,66.4,61.1,50.2
+"RB Leipzig","de Bundesliga",38.5,32.5,51.2,78.4,50.1
+"St. Pauli","de Bundesliga",22.3,34.1,64.8,79,50.1
+"Alavés","es La Liga",26.5,30.9,62.4,79.8,49.9
+"Lecce","it Serie A",28.8,26.4,59.8,84,49.7
+"Manchester Utd","eng Premier League",16,46.6,66.1,69.5,49.6
+"Lille","fr Ligue 1",31.6,34.4,58.9,72.5,49.4
+"Angers","fr Ligue 1",22.2,30.7,53.1,91.3,49.3
+"Las Palmas","es La Liga",35,31.4,57.4,72.9,49.2
+"Monaco","fr Ligue 1",36.3,39.6,64.3,55.1,48.8
+"Gladbach","de Bundesliga",37.2,36.5,59.3,61.4,48.6
+"Reims","fr Ligue 1",31.7,21,50.4,90.6,48.4
+"Fiorentina","it Serie A",29.6,31,59.5,73.5,48.4
+"Como","it Serie A",29.8,44.6,49.4,69.6,48.4
+"Rayo Vallecano","es La Liga",23.5,30.5,58.6,80.8,48.3
+"Heidenheim","de Bundesliga",27.3,30.7,58.7,76.6,48.3
+"Real Sociedad","es La Liga",27.2,36.3,53.9,75.8,48.3
+"Empoli","it Serie A",29.5,27.6,63.1,72.4,48.1
+"Union Berlin","de Bundesliga",37,24.7,51.1,79.5,48.1
+"Getafe","es La Liga",17.8,28.2,62.1,84.1,48
+"Freiburg","de Bundesliga",33.9,28.8,52.8,75.8,47.8
+"Bologna","it Serie A",38.8,30,61,61.2,47.8
+"Leicester City","eng Premier League",25.6,34.8,52.9,76.3,47.4
+"Girona","es La Liga",21.9,28.7,63.1,75.4,47.3
+"Torino","it Serie A",21,24.6,49.6,93.6,47.2
+"Tottenham","eng Premier League",31.7,35.3,55,65.5,46.9
+"Parma","it Serie A",23,30.9,44.9,88,46.7
+"Udinese","it Serie A",35.2,30.9,54.8,65.8,46.7
+"Rennes","fr Ligue 1",44.5,34.8,54.8,52.5,46.6
+"Mallorca","es La Liga",19.4,34.2,64,67.4,46.3
+"Southampton","eng Premier League",14.6,33.9,53.2,81.2,45.7
+"Hellas Verona","it Serie A",19.6,32.8,50.5,79.5,45.6
+"Toulouse","fr Ligue 1",21.1,32.8,64.7,60.7,44.8
+"Genoa","it Serie A",22.5,26.7,61.2,68.6,44.8
+"Strasbourg","fr Ligue 1",34.8,38.9,68.8,36.5,44.7
+"Monza","it Serie A",22.6,29.5,54.3,72.5,44.7
+"Nantes","fr Ligue 1",30.2,34.8,56.2,56.8,44.5
+"Lens","fr Ligue 1",21.7,41.9,53.8,60.1,44.4
+"Augsburg","de Bundesliga",24.9,31.9,58.3,61.6,44.2
+"Montpellier","fr Ligue 1",16.4,37.1,44.2,77.7,43.8
+"Betis","es La Liga",24.3,40.9,51.2,57.2,43.4
+"Bochum","de Bundesliga",17.9,31.7,56.4,65.3,42.8
+"Athletic Club","es La Liga",35.5,28.5,46.2,59.3,42.4
+"Le Havre","fr Ligue 1",22.5,32.4,54,60.3,42.3
+"Holstein Kiel","de Bundesliga",29.2,25.1,45.9,69,42.3
+"Ipswich Town","eng Premier League",21.4,31.1,50.9,60.7,41
+"Cagliari","it Serie A",23.7,27.2,60,46.5,39.4
+"Venezia","it Serie A",20.5,37.6,45.6,53.5,39.3
+"Valladolid","es La Liga",12.5,27.7,45.4,44.9,32.6

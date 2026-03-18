@@ -1,0 +1,687 @@
+---
+title: "Análisis de mercado de jugadores — 5 grandes ligas (2024/2025)"
+author: "Enrique Lahuerta y David Alcolea"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    theme: flatly
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.width = 8, fig.height = 5)
+
+# Librerías necesarias
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(viridis)
+library(ggrepel)
+```
+
+# 1. Carga y preparación de datos
+
+## 1.1 Carga de datasets
+
+Cargamos tres fuentes:
+- **players_data**: Estadísticas de rendimiento (FBref)
+- **players**: Información demográfica
+- **player_valuations**: Valor de mercado histórico (Transfermarkt)
+
+```{r data-loading}
+estadisticas <- read.csv("./data/players_data-2024_2025.csv", stringsAsFactors = FALSE)
+jugadores <- read.csv("./data/players.csv", stringsAsFactors = FALSE)
+valor <- read.csv("./data/player_valuations.csv", stringsAsFactors = FALSE)
+```
+
+## 1.2 Procesamiento de valor de mercado
+
+Obtenemos el valor más reciente para cada jugador.
+
+```{r process-market-value}
+valor_jugador <- valor %>%
+  mutate(date = as.numeric(sapply(strsplit(date, "-"), `[`, 1))) %>%
+  merge(jugadores, by = "player_id", all.x = TRUE) %>%
+  group_by(player_id) %>%
+  arrange(desc(date)) %>%
+  slice(1) %>%
+  ungroup()
+
+estadisticas <- estadisticas %>%
+  group_by(Player) %>%
+  arrange(desc(Rk), .by_group = TRUE) %>%
+  slice_head(n = 1) %>%
+  ungroup()
+```
+
+## 1.3 Merge de datasets
+
+Normalizamos nombres para unir correctamente los datos.
+
+```{r merge-datasets}
+estadisticas <- estadisticas %>%
+  mutate(name = tolower(iconv(Player, from = "UTF-8", to = "ASCII//TRANSLIT")))
+
+valor_jugador_unique <- valor_jugador %>%
+  mutate(name_clean = tolower(iconv(name, from = "UTF-8", to = "ASCII//TRANSLIT"))) %>%
+  group_by(name_clean) %>%
+  slice_max(market_value_in_eur.x, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(name_clean, market_value_in_eur.x)
+
+estadisticas <- estadisticas %>%
+  left_join(valor_jugador_unique, by = c("name" = "name_clean")) %>%
+  rename(market_value = market_value_in_eur.x) %>%
+  mutate(Pos = trimws(sapply(strsplit(Pos, ","), `[`, 1))) %>%
+  filter(!is.na(market_value) & market_value > 0) %>%
+  arrange(desc(market_value))
+
+cat("Jugadores totales:", nrow(estadisticas), "\n")
+```
+
+## 1.4 Filtro de jugadores titulares
+
+Filtro más estricto para evitar suplentes con estadísticas infladas en pocas apariciones.
+
+**Criterio**: Mínimo **2000 minutos** Y **22 partidos** como titular.
+
+```{r filter-starters}
+cat("Antes del filtro:", nrow(estadisticas), "\n")
+
+estadisticas <- estadisticas %>%
+  filter(Min >= 1500 & Starts >= 15) %>%
+  mutate(
+    Matches_90 = Min / 90,
+    Minutes_factor = pmin(1.0, Min / 2700)  # Factor de consistencia (1.0 si >= 30 partidos)
+  )
+
+cat("Después del filtro:", nrow(estadisticas), "\n")
+cat("  Porteros (GK):", sum(estadisticas$Pos == "GK"), "\n")
+cat("  Defensas (DF):", sum(estadisticas$Pos == "DF"), "\n")
+cat("  Mediocampistas (MF):", sum(estadisticas$Pos == "MF"), "\n")
+cat("  Delanteros (FW):", sum(estadisticas$Pos == "FW"), "\n")
+```
+
+---
+
+# 2. Normalización de variables per-90
+
+Normalizamos estadísticas de volumen a "por 90 minutos" para comparabilidad.
+
+```{r normalize-per-90}
+vars_to_normalize <- c(
+  "Gls", "Ast", "npxG", "xAG", "npxG.xAG", "G.PK",
+  "Sh", "SoT", "GCA", "SCA", "KP", "PPA", "CrsPA", "TB", "Sw",
+  "Cmp", "Att", "TotDist", "PrgDist", "PrgP",
+  "Tkl", "TklW", "Int", "Clr", "Blocks", "Err",
+  "Won", "Lost", "Recov",
+  "Saves", "CS", "GA", "SoTA", "PKsv", "PKm", "PSxG",
+  "Carries", "Succ", "Touches",
+  "xA", "Mid.3rd", "Def.Pen", "PrgC"
+)
+
+for(var in vars_to_normalize) {
+  if(var %in% names(estadisticas)) {
+    new_var_name <- paste0(var, "_90")
+    estadisticas[[new_var_name]] <- estadisticas[[var]] / estadisticas$Matches_90
+  }
+}
+
+estadisticas <- estadisticas %>%
+  mutate(
+    GA_90 = ifelse(!is.na(Gls_90) & !is.na(Ast_90), Gls_90 + Ast_90, NA),
+    npxG_xAG_90 = ifelse(!is.na(npxG_90) & !is.na(xAG_90), npxG_90 + xAG_90, NA),
+    Tkl_Int_90 = ifelse(!is.na(Tkl_90) & !is.na(Int_90), Tkl_90 + Int_90, NA)
+  )
+
+cat("Variables normalizadas a per-90 exitosamente\n")
+```
+
+---
+
+# 3. Creación de variables de eficiencia
+
+Creamos métricas de **calidad** (ratios, porcentajes) en lugar de volumen absoluto.
+
+## 3.1 Variables por posición
+
+```{r efficiency-variables}
+estadisticas <- estadisticas %>%
+  mutate(
+    # === PORTEROS ===
+    Save_pct = ifelse(!is.na(Save.), Save.,
+                      ifelse(!is.na(SoTA) & SoTA > 0, (Saves / SoTA) * 100, NA)),
+    CS_pct = ifelse(!is.na(CS) & Matches_90 > 0, (CS / Matches_90) * 100, NA),
+    Goals_prevented_per90 = ifelse(!is.na(PSxG) & !is.na(GA) & Matches_90 > 0,
+                                   (PSxG - GA) / Matches_90, NA),
+    PSxG_per_SoT = ifelse(!is.na(PSxG.SoT), PSxG.SoT, NA),
+    GK_Pass_pct = ifelse(!is.na(Cmp.) & Pos == "GK", Cmp., NA),
+
+    # === DEFENSAS ===
+    Tkl_success_pct = ifelse(!is.na(Tkl.) & Pos == "DF", Tkl.,
+                             ifelse(!is.na(TklW) & !is.na(Tkl) & Tkl > 0,
+                                    (TklW / Tkl) * 100, NA)),
+    Aerial_win_pct = ifelse(!is.na(Won.) & Pos == "DF", Won., NA),
+    Duel_win_pct = ifelse(!is.na(Won) & !is.na(Lost) & (Won + Lost) > 0,
+                          (Won / (Won + Lost)) * 100, 50),
+    Err_per_90 = ifelse(!is.na(Err) & Matches_90 > 0, Err / Matches_90, 0),
+    Err_index = 1 / (1 + Err_per_90),
+    Prog_passing_index = ifelse(!is.na(PrgP_90) & !is.na(Cmp.) & Pos == "DF",
+                                (PrgP_90 / 5) * (Cmp. / 100), NA),
+
+    # === MEDIOCAMPISTAS ===
+    Dribble_success_pct = ifelse(!is.na(Succ.) & Pos == "MF", Succ., NA),
+    Creation_index = ifelse(!is.na(SCA_90) & !is.na(GCA_90) & Pos == "MF",
+                           (SCA_90 * 0.5 + GCA_90 * 2) / 3, NA),
+    Progression_index = ifelse(!is.na(PrgC_90) & !is.na(PrgP_90) & Pos == "MF",
+                              (PrgC_90 + PrgP_90 / 2) / 2, NA),
+    Key_pass_accuracy = ifelse(!is.na(Cmp.) & !is.na(KP_90) & Pos == "MF",
+                               Cmp. * (1 + KP_90 / 5) / 100, NA),
+
+    # === DELANTEROS ===
+    Goal_efficiency = ifelse(!is.na(Gls) & !is.na(npxG) & npxG > 0.5,
+                            Gls / npxG, NA),
+    Shot_accuracy_pct = ifelse(!is.na(SoT.) & Pos == "FW", SoT., NA),
+    Shot_conversion_pct = ifelse(!is.na(G.Sh) & Pos == "FW", G.Sh * 100,
+                                 ifelse(!is.na(Gls) & !is.na(Sh) & Sh > 0,
+                                        (Gls / Sh) * 100, NA)),
+    Attacking_output = ifelse(!is.na(Gls_90) & !is.na(Ast_90) & !is.na(npxG_90),
+                             Gls_90 * 1.5 + Ast_90 * 1.0 + npxG_90 * 0.5, NA),
+    Finishing_quality = ifelse(!is.na(G.SoT) & Pos == "FW", G.SoT * 100, NA)
+  )
+
+cat("Variables de eficiencia creadas exitosamente\n")
+```
+
+---
+
+# 4. Ajuste por dificultad de liga
+
+Las ligas tienen diferentes niveles competitivos. Aplicamos un factor de ajuste basado en:
+- Valor de mercado promedio de la liga
+- Performance histórica en competiciones europeas
+- Análisis de mercado
+
+## 4.1 Factores de dificultad por liga
+
+```{r league-difficulty}
+# Calcular valor promedio por liga
+league_avg_value <- estadisticas %>%
+  group_by(Comp) %>%
+  summarise(
+    avg_market_value = mean(market_value, na.rm = TRUE),
+    n_players = n(),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(avg_market_value))
+
+cat("Valor promedio por liga:\n")
+print(league_avg_value)
+
+# Factores de ajuste basados en competitividad real
+# Premier League = referencia (1.00)
+league_factors <- data.frame(
+  Comp = c("Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1"),
+  difficulty_factor = c(1.00, 0.95, 0.92, 0.94, 0.85),
+  stringsAsFactors = FALSE
+)
+
+estadisticas <- estadisticas %>%
+  left_join(league_factors, by = "Comp") %>%
+  mutate(difficulty_factor = ifelse(is.na(difficulty_factor), 0.95, difficulty_factor))
+
+cat("\nFactores de dificultad aplicados:\n")
+print(league_factors)
+```
+
+---
+
+# 5. Sistema de rating por posición
+
+Usamos las **top 8-10 variables** con mayor correlación con market_value según el análisis previo.
+
+Los pesos se calculan automáticamente mediante correlación de Spearman.
+
+## 5.1 Función de cálculo de rating
+
+```{r rating-function}
+calcular_rating_posicion <- function(datos, posicion) {
+
+  datos_pos <- datos %>% filter(Pos == posicion)
+
+  # Seleccionar top variables según análisis de correlación previo
+  if(posicion == "FW") {
+    # Top variables: npxG, xAG, SCA90, GCA90, npxG.xAG, Gls, KP, PrgC
+    vars_rating <- c("npxG_90", "xAG_90", "SCA_90", "GCA_90", "npxG_xAG_90",
+                     "Gls_90", "KP_90", "PrgC_90", "Ast_90", "CPA_90")
+
+  } else if(posicion == "MF") {
+    # Top variables: SCA90, Carries, PrgC, xA, KP, PPA, GCA90, PrgP
+    vars_rating <- c("SCA_90", "Carries_90", "PrgC_90", "xA_90", "KP_90",
+                     "PPA_90", "GCA_90", "PrgP_90", "TB_90", "Ast_90")
+
+  } else if(posicion == "DF") {
+    # Top variables: PrgP, Cmp, TotDist, PrgDist, Tkl, Int, TklW, Touches
+    vars_rating <- c("PrgP_90", "Cmp_90", "TotDist_90", "PrgDist_90",
+                     "Tkl_90", "Int_90", "TklW_90", "Touches_90", "Recov_90", "Tkl_Int_90")
+
+  } else if(posicion == "GK") {
+    # Top variables: Save_pct, CS, PSxG, Saves, CS_pct
+    vars_rating <- c("Save_pct", "CS", "PSxG", "Saves_90", "CS_pct",
+                     "Goals_prevented_per90", "PSxG_per_SoT", "GK_Pass_pct")
+  }
+
+  vars_disponibles <- vars_rating[vars_rating %in% names(datos_pos)]
+
+  if(length(vars_disponibles) < 3) {
+    warning(paste("Posición", posicion, "tiene muy pocas variables"))
+    return(NULL)
+  }
+
+  datos_pca <- datos_pos %>%
+    select(Player, Squad, Comp, market_value, difficulty_factor, Minutes_factor,
+           all_of(vars_disponibles))
+
+  # Imputar NAs con mediana
+  for(v in vars_disponibles) {
+    if(any(is.na(datos_pca[[v]]))) {
+      mediana <- median(datos_pca[[v]], na.rm = TRUE)
+      datos_pca[[v]][is.na(datos_pca[[v]])] <- mediana
+    }
+  }
+
+  # Añadir market_value normalizado como variable de élite
+  datos_pca$market_value_norm <- log(datos_pca$market_value + 1)
+  vars_disponibles_full <- c(vars_disponibles, "market_value_norm")
+
+  # Estandarizar
+  datos_std <- datos_pca %>%
+    select(all_of(vars_disponibles_full)) %>%
+    scale() %>%
+    as.data.frame()
+
+  # Calcular pesos por correlación con market_value
+  correlaciones <- sapply(vars_disponibles_full, function(var) {
+    cor(datos_pca$market_value, datos_pca[[var]],
+        use = "complete.obs", method = "spearman")
+  })
+
+  pesos <- abs(correlaciones) / sum(abs(correlaciones))
+
+  # Calcular rating bruto ponderado
+  rating_bruto <- rep(0, nrow(datos_std))
+  for(i in seq_along(vars_disponibles_full)) {
+    rating_bruto <- rating_bruto + (datos_std[[vars_disponibles_full[i]]] * pesos[i])
+  }
+
+  # APLICAR AJUSTES: dificultad de liga Y factor de minutos
+  rating_ajustado <- rating_bruto * datos_pca$difficulty_factor * datos_pca$Minutes_factor
+
+  # Convertir a escala 50-100 conservadora
+  percentiles <- percent_rank(rating_ajustado)
+
+  rating_0_100 <- case_when(
+    percentiles < 0.30 ~ 50 + (percentiles / 0.30) * 10,
+    percentiles < 0.50 ~ 60 + ((percentiles - 0.30) / 0.20) * 8,
+    percentiles < 0.70 ~ 68 + ((percentiles - 0.50) / 0.20) * 8,
+    percentiles < 0.85 ~ 76 + ((percentiles - 0.70) / 0.15) * 8,
+    percentiles < 0.95 ~ 84 + ((percentiles - 0.85) / 0.10) * 8,
+    TRUE ~ 92 + ((percentiles - 0.95) / 0.05) * 8
+  )
+
+  resultado <- datos_pca %>%
+    select(Player, Squad, Comp) %>%
+    mutate(
+      pos = posicion,
+      rating = pmin(100, pmax(50, rating_0_100))
+    )
+
+  # Resumen
+  cat(sprintf("\n=== %s ===\n", posicion))
+  cat(sprintf("Variables: %d | Jugadores: %d\n", length(vars_disponibles), nrow(resultado)))
+  cat(sprintf("Factor liga: %.2f - %.2f | Factor minutos: %.2f - %.2f\n",
+              min(datos_pca$difficulty_factor), max(datos_pca$difficulty_factor),
+              min(datos_pca$Minutes_factor), max(datos_pca$Minutes_factor)))
+  cat("\nPesos por correlación (top 5):\n")
+  pesos_sorted <- sort(pesos, decreasing = TRUE)
+  for(v in names(pesos_sorted)[1:min(5, length(pesos_sorted))]) {
+    cat(sprintf("  %.3f - %s\n", pesos_sorted[v], v))
+  }
+
+  return(resultado)
+}
+```
+
+## 5.2 Calcular ratings
+
+```{r calculate-ratings}
+posiciones <- c("FW", "MF", "DF", "GK")
+ratings_list <- list()
+
+for(pos in posiciones) {
+  rating_pos <- calcular_rating_posicion(estadisticas, pos)
+  if(!is.null(rating_pos)) {
+    ratings_list[[pos]] <- rating_pos
+  }
+}
+
+ratings_all <- bind_rows(ratings_list)
+
+cat("\n✓ Rating completado para", nrow(ratings_all), "jugadores\n")
+```
+
+## 5.3 Añadir ratings a estadísticas
+
+```{r add-ratings-to-stats}
+estadisticas <- estadisticas %>%
+  left_join(
+    ratings_all %>% select(Player, pos, rating),
+    by = c("Player", "Pos" = "pos")
+  )
+```
+
+---
+
+# 6. Top jugadores por posición
+
+```{r top-players}
+cat("\n=== TOP 15 JUGADORES POR POSICIÓN ===\n\n")
+
+for(p in posiciones) {
+  cat("\n", rep("=", 70), "\n", sep="")
+  cat("POSICIÓN:", p, "\n")
+  cat(rep("=", 70), "\n", sep="")
+
+  top_pos <- ratings_all %>%
+    filter(pos == p) %>%
+    arrange(desc(rating)) %>%
+    head(15) %>%
+    left_join(estadisticas %>% select(Player, Age, Min, market_value),
+              by = "Player") %>%
+    mutate(market_value_M = round(market_value / 1e6, 1)) %>%
+    select(Player, Squad, Comp, rating, Age, market_value_M)
+
+  print(top_pos)
+}
+```
+
+## 6.1 Visualización top players
+
+```{r plot-top-players, fig.width=10, fig.height=12}
+top_players <- ratings_all %>%
+  filter(!is.na(rating)) %>%
+  group_by(pos) %>%
+  slice_max(rating, n = 15, with_ties = FALSE) %>%
+  arrange(pos, desc(rating)) %>%
+  mutate(Player = factor(Player, levels = rev(unique(Player)))) %>%
+  ungroup()
+
+ggplot(top_players, aes(x = rating, y = Player, fill = rating)) +
+  geom_col(width = 0.7, show.legend = FALSE) +
+  geom_text(aes(label = sprintf("%.1f", rating)),
+            hjust = -0.1, size = 3, color = "black") +
+  facet_wrap(~pos, scales = "free_y", ncol = 2) +
+  scale_fill_viridis_c(option = "D", begin = 0.2, end = 0.85) +
+  coord_cartesian(xlim = c(0, 105)) +
+  labs(title = "Top 15 Jugadores por Posición",
+       subtitle = "Rating ajustado por dificultad de liga",
+       x = "Rating (50-100)", y = "") +
+  theme_minimal(base_size = 11) +
+  theme(strip.text = element_text(size = 12, face = "bold"),
+        axis.text.y = element_text(size = 9))
+```
+
+---
+
+# 7. Análisis de chollos (value for money)
+
+Identificamos jugadores infravalorados o sobrevalorados comparando su rating con su valor de mercado.
+
+## 7.1 Modelo de valor esperado
+
+```{r bargain-model}
+df_chollos <- estadisticas %>%
+  filter(!is.na(rating) & !is.na(market_value) & !is.na(Age) & market_value > 0) %>%
+  mutate(log_value = log(market_value))
+
+modelo_valor <- lm(log_value ~ rating * Pos + I(20/Age) + difficulty_factor,
+                   data = df_chollos)
+
+cat("\nR² del modelo:", round(summary(modelo_valor)$r.squared, 3), "\n")
+
+df_chollos <- df_chollos %>%
+  mutate(
+    predicted_log = predict(modelo_valor),
+    residual = log_value - predicted_log,
+    z_residual = scale(residual)[,1],
+    categoria = case_when(
+      z_residual < -1.5 ~ "Chollo extremo",
+      z_residual < -1.0 ~ "Chollo",
+      z_residual > 1.5 ~ "Sobrepagado",
+      z_residual > 1.0 ~ "Caro",
+      TRUE ~ "Normal"
+    ),
+    categoria = factor(categoria, levels = c("Chollo extremo", "Chollo",
+                                              "Normal", "Caro", "Sobrepagado"))
+  )
+
+cat("\nDistribución:\n")
+print(table(df_chollos$categoria))
+```
+
+## 7.2 Top chollos
+
+```{r top-bargains}
+top_chollos <- df_chollos %>%
+  filter(z_residual < -1.0) %>%
+  arrange(z_residual) %>%
+  select(Player, Squad, Comp, Pos, Age, rating, market_value, z_residual) %>%
+  head(20)
+
+cat("\n=== TOP 20 CHOLLOS ===\n")
+print(top_chollos)
+```
+
+## 7.3 Visualización chollos
+
+```{r plot-bargains, fig.width=10, fig.height=8}
+highlight_chollos <- df_chollos %>%
+  filter(categoria %in% c("Chollo extremo", "Chollo", "Sobrepagado"))
+
+ggplot(df_chollos, aes(x = rating, y = market_value)) +
+  geom_point(aes(color = categoria), alpha = 0.4, size = 2) +
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "black",
+              linetype = "dashed") +
+  geom_point(data = highlight_chollos, aes(color = categoria), size = 3) +
+  geom_text_repel(
+    data = highlight_chollos %>% filter(categoria == "Chollo extremo"),
+    aes(label = Player),
+    size = 2.5,
+    max.overlaps = 15,
+    box.padding = 0.5
+  ) +
+  scale_y_log10(labels = scales::dollar_format(prefix = "€", suffix = "M",
+                                                scale = 1e-6)) +
+  scale_color_manual(
+    values = c("Chollo extremo" = "#00BA38", "Chollo" = "#619CFF",
+               "Normal" = "grey70", "Caro" = "#F8766D", "Sobrepagado" = "#FF0000")
+  ) +
+  facet_wrap(~Pos, scales = "free") +
+  labs(
+    title = "Detección de Chollos y Sobrepagados",
+    subtitle = "Modelo: log(valor) ~ rating * posición + edad + dificultad_liga",
+    x = "Rating (50-100)",
+    y = "Valor de Mercado (escala log)",
+    color = "Categoría"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    strip.text = element_text(face = "bold", size = 11),
+    legend.position = "bottom"
+  )
+```
+
+---
+
+# 8. Recomendaciones de fichajes
+
+## 8.1 Identificar necesidades por equipo
+
+```{r team-needs}
+min_starts <- median(estadisticas$Starts, na.rm = TRUE)
+
+pos_map <- c(FW = "Attack", MF = "Midfield", DF = "Defense", GK = "Goalkeeping")
+
+ratings_with_squad <- ratings_all %>%
+  left_join(estadisticas %>% select(Player, Starts, Min), by = "Player")
+
+team_pos_scores <- ratings_with_squad %>%
+  filter(!is.na(Squad)) %>%
+  mutate(is_starter = Starts >= min_starts) %>%
+  group_by(Squad, pos) %>%
+  summarise(
+    mean_starters = mean(rating[is_starter], na.rm = TRUE),
+    mean_all = mean(rating, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    mean_used = ifelse(!is.na(mean_starters), mean_starters, mean_all),
+    dimension = pos_map[pos]
+  ) %>%
+  filter(!is.na(dimension)) %>%
+  select(Squad, dimension, mean_used)
+
+team_needs <- team_pos_scores %>%
+  group_by(Squad) %>%
+  slice_min(mean_used, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(Squad, dimension, need_score = mean_used)
+
+dim_to_pos <- data.frame(
+  dimension = c("Attack", "Midfield", "Defense", "Goalkeeping"),
+  Pos_needed = c("FW", "MF", "DF", "GK")
+)
+
+team_needs <- team_needs %>%
+  left_join(dim_to_pos, by = "dimension")
+
+cat("Necesidades identificadas para", nrow(team_needs), "equipos\n")
+```
+
+## 8.2 Generar recomendaciones
+
+```{r transfer-recommendations}
+df_equipos <- estadisticas %>%
+  filter(!is.na(market_value)) %>%
+  group_by(Squad) %>%
+  summarise(
+    total_value = sum(market_value, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    presupuesto_group = case_when(
+      total_value >= quantile(total_value, 0.66) ~ "Top",
+      total_value >= quantile(total_value, 0.33) ~ "Medio",
+      TRUE ~ "Bajo"
+    )
+  )
+
+rango_precios <- data.frame(
+  group = c("Top", "Medio", "Bajo"),
+  min_val = c(5e6, 1e6, 0.2e6),
+  max_val = c(80e6, 15e6, 5e6)
+)
+
+jugadores_disponibles <- df_chollos %>%
+  filter(z_residual < -0.5) %>%
+  select(Player, Squad, Comp, Pos, Age, rating, market_value, z_residual)
+
+recomendaciones_lista <- list()
+
+for(i in 1:nrow(team_needs)) {
+  equipo <- team_needs$Squad[i]
+  pos_necesaria <- team_needs$Pos_needed[i]
+
+  presupuesto_info <- df_equipos %>%
+    filter(Squad == equipo) %>%
+    left_join(rango_precios, by = c("presupuesto_group" = "group"))
+
+  if(nrow(presupuesto_info) == 0) next
+
+  candidatos <- jugadores_disponibles %>%
+    filter(
+      Pos == pos_necesaria,
+      market_value >= presupuesto_info$min_val[1],
+      market_value <= presupuesto_info$max_val[1],
+      Squad != equipo
+    ) %>%
+    arrange(z_residual) %>%
+    head(3)
+
+  if(nrow(candidatos) > 0) {
+    candidatos$Squad_destino <- equipo
+    recomendaciones_lista[[i]] <- candidatos
+  }
+}
+
+recomendaciones_final <- bind_rows(recomendaciones_lista)
+
+if(nrow(recomendaciones_final) > 0) {
+  recomendaciones_final <- recomendaciones_final %>%
+    rename(Squad_origen = Squad, Squad = Squad_destino) %>%
+    select(Squad, Player, Squad_origen, Comp, Pos, Age, rating,
+           market_value, z_residual)
+
+  cat("\nTop 20 recomendaciones:\n")
+  print(head(recomendaciones_final, 20))
+}
+```
+
+---
+
+# 9. Resumen ejecutivo
+
+```{r summary}
+cat("\n")
+cat(rep("=", 70), "\n", sep="")
+cat("               RESUMEN DEL ANÁLISIS\n")
+cat(rep("=", 70), "\n\n", sep="")
+
+cat("1. SISTEMA DE RATING\n")
+cat("   - Jugadores: Min >= 1800 Y Starts >= 20\n")
+cat("   - Variables: Top 8-10 con mayor correlación con market_value\n")
+cat("   - Pesos: Calculados automáticamente (correlación Spearman)\n")
+cat("   - Ajuste por dificultad de liga incluido\n")
+cat("   - Escala conservadora: 50-100\n\n")
+
+cat("2. DISTRIBUCIÓN DE RATINGS\n")
+dist <- estadisticas %>%
+  filter(!is.na(rating)) %>%
+  group_by(Pos) %>%
+  summarise(
+    n = n(),
+    media = mean(rating, na.rm = TRUE),
+    mediana = median(rating, na.rm = TRUE),
+    max = max(rating, na.rm = TRUE),
+    .groups = "drop"
+  )
+print(dist)
+
+cat("\n3. CHOLLOS DETECTADOS\n")
+cat("   Chollos (z < -1.0):", sum(df_chollos$z_residual < -1.0), "\n")
+cat("   Sobrepagados (z > 1.0):", sum(df_chollos$z_residual > 1.0), "\n")
+
+if(exists("recomendaciones_final") && nrow(recomendaciones_final) > 0) {
+  cat("\n4. RECOMENDACIONES\n")
+  cat("   Equipos:", length(unique(recomendaciones_final$Squad)), "\n")
+  cat("   Fichajes sugeridos:", nrow(recomendaciones_final), "\n")
+}
+
+cat("\n")
+cat(rep("=", 70), "\n", sep="")
+cat("                    FIN DEL ANÁLISIS\n")
+cat(rep("=", 70), "\n", sep="")
+```
